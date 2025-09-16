@@ -47,16 +47,19 @@ if df.empty:
     st.stop()
 
 # Data preprocessing
-required_columns = ['TransactionDate', 'Amount', 'TransactionType', 'Nama']
+required_columns = ['TransactionDate', 'Amount', 'TransactionType', 'Nama', 'ClusterID', 'Sender']
 if not all(col in df.columns for col in required_columns):
     st.error(f"Required columns {required_columns} not found in the data.")
     st.stop()
 
 df['TransactionDate'] = pd.to_datetime(df['TransactionDate'], errors='coerce')
 df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
-
-# NEW: Fill missing 'Nama' values with "tanpa_nama"
 df['Nama'] = df['Nama'].fillna("tanpa_nama")
+
+# Add fillna for new filter columns to handle potential missing values
+df['TransactionType'] = df['TransactionType'].fillna("tanpa_tipe")
+df['ClusterID'] = df['ClusterID'].fillna("tanpa_cluster").astype(str)
+df['Sender'] = df['Sender'].fillna("tanpa_sender")
 
 st.write(f"Rows loaded: {len(df)}")
 
@@ -104,12 +107,36 @@ date_range = st.sidebar.date_input(
     max_value=max_date
 )
 
-# Name Filter (FIXED)
+# Name Filter
 unique_names = sorted(df['Nama'].unique())
 selected_names = st.sidebar.multiselect(
     "Filter by Name",
     options=unique_names,
     default=unique_names
+)
+
+# NEW: TransactionType Filter
+unique_transaction_types = sorted(df['TransactionType'].unique())
+selected_transaction_types = st.sidebar.multiselect(
+    "Filter by Transaction Type",
+    options=unique_transaction_types,
+    default=unique_transaction_types
+)
+
+# NEW: ClusterID Filter
+unique_cluster_ids = sorted(df['ClusterID'].unique())
+selected_cluster_ids = st.sidebar.multiselect(
+    "Filter by Cluster ID",
+    options=unique_cluster_ids,
+    default=unique_cluster_ids
+)
+
+# NEW: Sender Filter
+unique_senders = sorted(df['Sender'].unique())
+selected_senders = st.sidebar.multiselect(
+    "Filter by Sender",
+    options=unique_senders,
+    default=unique_senders
 )
 
 # Initial Balance Input
@@ -124,10 +151,13 @@ saldo_awal = st.sidebar.number_input(
 if len(date_range) == 2:
     start_date, end_date = date_range
     
-    # Apply both date and name filters
+    # Apply all filters
     filtered_df = df[(df['TransactionDate'].dt.date >= start_date) & 
                      (df['TransactionDate'].dt.date <= end_date) & 
-                     (df['Nama'].isin(selected_names))].copy()
+                     (df['Nama'].isin(selected_names)) &
+                     (df['TransactionType'].isin(selected_transaction_types)) &
+                     (df['ClusterID'].isin(selected_cluster_ids)) &
+                     (df['Sender'].isin(selected_senders))].copy()
     
     if filtered_df.empty:
         st.warning("No data found for the selected filters.")
