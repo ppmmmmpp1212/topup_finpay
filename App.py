@@ -74,6 +74,10 @@ df['TransactionType'] = df['TransactionType'].fillna("tanpa_tipe")
 df['ClusterID'] = df['ClusterID'].fillna("tanpa_cluster").astype(str)
 df['Sender'] = df['Sender'].fillna("tanpa_sender")
 
+# Get latest data update timestamp
+latest_date = df['TransactionDate'].max()
+st.info(f"Data Update: {latest_date.strftime('%Y-%m-%d %H:%M:%S')}")
+
 st.write(f"Total Baris data: {len(df)}")
 
 # Define the initial balances based on ClusterID
@@ -301,12 +305,12 @@ if len(date_range) == 2:
     ## Summary Table of All Clusters (New location)
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown(
-            """
-            <h2 style='text-align: center;'>Ringkasan Saldo Berdasarkan Cluster
-            </h2>
-            """,
-            unsafe_allow_html=True
-        )
+        """
+        <h2 style='text-align: center;'>Ringkasan Saldo Berdasarkan Cluster
+        </h2>
+        """,
+        unsafe_allow_html=True
+    )
 
     # Create a summary DataFrame
     summary_df = df.groupby('ClusterID')['Amount'].sum().reset_index()
@@ -315,10 +319,14 @@ if len(date_range) == 2:
     # Separate Debit and Kredit
     total_kredit_by_cluster = df[df['TransactionType'] == 'Kredit'].groupby('ClusterID')['Amount'].sum()
     total_debit_by_cluster = df[df['TransactionType'] == 'Debit'].groupby('ClusterID')['Amount'].sum()
+    
+    # Calculate latest transaction date per cluster
+    latest_date_by_cluster = df.groupby('ClusterID')['TransactionDate'].max()
 
     # Merge into a single summary DataFrame
     summary_df = summary_df.merge(total_kredit_by_cluster, on='ClusterID', how='left').rename(columns={'Amount': 'Total Kredit'})
     summary_df = summary_df.merge(total_debit_by_cluster, on='ClusterID', how='left').rename(columns={'Amount': 'Total Debit'})
+    summary_df = summary_df.merge(latest_date_by_cluster, on='ClusterID', how='left').rename(columns={'TransactionDate': 'Data Update'})
 
     # Fill NaN with 0 for clusters with no credit or debit transactions
     summary_df[['Total Kredit', 'Total Debit']] = summary_df[['Total Kredit', 'Total Debit']].fillna(0)
@@ -331,18 +339,19 @@ if len(date_range) == 2:
     total_running_balance = summary_df['Running Balance'].sum()
 
     # Add a summary row at the bottom of the dataframe
-    # FIX: Ensure all columns are present in the new row
     summary_row = pd.DataFrame([['Total', 
+                                 '---', # Data Update for total row
                                  summary_df['Total Transaksi'].sum(), 
                                  summary_df['Total Kredit'].sum(), 
                                  summary_df['Total Debit'].sum(), 
                                  summary_df['Initial Balance'].sum(), 
                                  total_running_balance]], 
-                               columns=['ClusterID', 'Total Transaksi', 'Total Kredit', 'Total Debit', 'Initial Balance', 'Running Balance'])
+                               columns=['ClusterID', 'Data Update', 'Total Transaksi', 'Total Kredit', 'Total Debit', 'Initial Balance', 'Running Balance'])
     
     summary_df = pd.concat([summary_df, summary_row], ignore_index=True)
 
-    # Reformat numeric columns for display with commas
+    # Reformat numeric and datetime columns for display
+    summary_df['Data Update'] = summary_df['Data Update'].apply(lambda x: x.strftime('%Y-%m-%d %H:%M:%S') if pd.notnull(x) and x != '---' else '---')
     summary_df['Total Transaksi'] = summary_df['Total Transaksi'].apply(lambda x: f"{x:,.0f}")
     summary_df['Total Kredit'] = summary_df['Total Kredit'].apply(lambda x: f"{x:,.0f}")
     summary_df['Total Debit'] = summary_df['Total Debit'].apply(lambda x: f"{x:,.0f}")
@@ -350,7 +359,7 @@ if len(date_range) == 2:
     summary_df['Running Balance'] = summary_df['Running Balance'].apply(lambda x: f"{x:,.0f}")
 
     # Reorder columns for better readability
-    summary_df = summary_df[['ClusterID', 'Total Kredit', 'Total Debit', 'Initial Balance', 'Running Balance']]
+    summary_df = summary_df[['ClusterID', 'Data Update', 'Total Kredit', 'Total Debit', 'Initial Balance', 'Running Balance']]
 
     st.dataframe(summary_df, use_container_width=True)
 
