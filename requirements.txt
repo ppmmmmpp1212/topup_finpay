@@ -1,0 +1,9 @@
+streamlit
+google-cloud-bigquery
+google-auth
+pandas
+plotly
+db-dtypes
+xlsxwriter
+streamlit_option_menu
+openpyxl
