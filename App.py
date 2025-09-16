@@ -158,7 +158,7 @@ date_range = st.sidebar.date_input(
 ## Interactive Scorecards & Filtered Charts (Moved into date_range condition)
 col1, col2, col3 = st.columns(3)
 
-if len(date_range) == 2:
+if len(date_range) == 1:
     start_date, end_date = date_range
 
     # Define the initial balances based on ClusterID
