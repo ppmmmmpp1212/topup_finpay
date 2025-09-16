@@ -251,54 +251,6 @@ if len(date_range) == 2:
     
     st.markdown("<br>", unsafe_allow_html=True) # Menambahkan baris kosong menggunakan HTML
     st.markdown("<br>", unsafe_allow_html=True) # Menambahkan baris kosong menggunakan HTML
-
-    # ---
-    ## Summary Table of All Clusters (New location)
-    st.subheader("Ringkasan Saldo Berdasarkan Klaster (Semua Data)")
-
-    # Create a summary DataFrame
-    summary_df = df.groupby('ClusterID')['Amount'].sum().reset_index()
-    summary_df.rename(columns={'Amount': 'Total Transaksi'}, inplace=True)
-
-    # Separate Debit and Kredit
-    total_kredit_by_cluster = df[df['TransactionType'] == 'Kredit'].groupby('ClusterID')['Amount'].sum()
-    total_debit_by_cluster = df[df['TransactionType'] == 'Debit'].groupby('ClusterID')['Amount'].sum()
-
-    # Merge into a single summary DataFrame
-    summary_df = summary_df.merge(total_kredit_by_cluster, on='ClusterID', how='left').rename(columns={'Amount': 'Total Kredit'})
-    summary_df = summary_df.merge(total_debit_by_cluster, on='ClusterID', how='left').rename(columns={'Amount': 'Total Debit'})
-
-    # Fill NaN with 0 for clusters with no credit or debit transactions
-    summary_df[['Total Kredit', 'Total Debit']] = summary_df[['Total Kredit', 'Total Debit']].fillna(0)
-
-    # Add Initial Balance and Running Balance columns
-    summary_df['Initial Balance'] = summary_df['ClusterID'].map(initial_balances_by_cluster).fillna(0)
-    summary_df['Running Balance'] = summary_df['Initial Balance'] + summary_df['Total Kredit'] - summary_df['Total Debit']
-
-    # Reformat numeric columns for display with commas
-    summary_df['Total Kredit'] = summary_df['Total Kredit'].apply(lambda x: f"{x:,.0f}")
-    summary_df['Total Debit'] = summary_df['Total Debit'].apply(lambda x: f"{x:,.0f}")
-    summary_df['Initial Balance'] = summary_df['Initial Balance'].apply(lambda x: f"{x:,.0f}")
-    summary_df['Running Balance'] = summary_df['Running Balance'].apply(lambda x: f"{x:,.0f}")
-
-    # Reorder columns for better readability
-    summary_df = summary_df[['ClusterID', 'Total Kredit', 'Total Debit', 'Initial Balance', 'Running Balance']]
-
-    st.dataframe(summary_df, use_container_width=True)
-
-    # Download button for the summary table
-    summary_excel_buffer = io.BytesIO()
-    summary_df.to_excel(summary_excel_buffer, index=False, engine='xlsxwriter')
-    summary_excel_buffer.seek(0)
-    st.download_button(
-        label="Download Ringkasan Klaster",
-        data=summary_excel_buffer,
-        file_name='ringkasan_klaster.xlsx',
-        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        help='Klik untuk mengunduh ringkasan saldo klaster dalam format Excel.'
-    )
-
-    st.markdown("<br>", unsafe_allow_html=True)
     
     if final_filtered_df.empty:
         st.warning("No data found for the selected filters.")
@@ -344,3 +296,55 @@ if len(date_range) == 2:
         
         final_balance_display = final_filtered_df['RunningSaldo'].iloc[-1]
         st.markdown(f"**Final Balance: Rp {final_balance_display}**")
+
+    # ---
+    ## Summary Table of All Clusters (New location)
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.subheader("Ringkasan Saldo Berdasarkan Klaster (Semua Data)")
+
+    # Create a summary DataFrame
+    summary_df = df.groupby('ClusterID')['Amount'].sum().reset_index()
+    summary_df.rename(columns={'Amount': 'Total Transaksi'}, inplace=True)
+
+    # Separate Debit and Kredit
+    total_kredit_by_cluster = df[df['TransactionType'] == 'Kredit'].groupby('ClusterID')['Amount'].sum()
+    total_debit_by_cluster = df[df['TransactionType'] == 'Debit'].groupby('ClusterID')['Amount'].sum()
+
+    # Merge into a single summary DataFrame
+    summary_df = summary_df.merge(total_kredit_by_cluster, on='ClusterID', how='left').rename(columns={'Amount': 'Total Kredit'})
+    summary_df = summary_df.merge(total_debit_by_cluster, on='ClusterID', how='left').rename(columns={'Amount': 'Total Debit'})
+
+    # Fill NaN with 0 for clusters with no credit or debit transactions
+    summary_df[['Total Kredit', 'Total Debit']] = summary_df[['Total Kredit', 'Total Debit']].fillna(0)
+
+    # Add Initial Balance and Running Balance columns
+    summary_df['Initial Balance'] = summary_df['ClusterID'].map(initial_balances_by_cluster).fillna(0)
+    summary_df['Running Balance'] = summary_df['Initial Balance'] + summary_df['Total Kredit'] - summary_df['Total Debit']
+
+    # Reformat numeric columns for display with commas
+    summary_df['Total Kredit'] = summary_df['Total Kredit'].apply(lambda x: f"{x:,.0f}")
+    summary_df['Total Debit'] = summary_df['Total Debit'].apply(lambda x: f"{x:,.0f}")
+    summary_df['Initial Balance'] = summary_df['Initial Balance'].apply(lambda x: f"{x:,.0f}")
+    summary_df['Running Balance'] = summary_df['Running Balance'].apply(lambda x: f"{x:,.0f}")
+
+    # Reorder columns for better readability
+    summary_df = summary_df[['ClusterID', 'Total Kredit', 'Total Debit', 'Initial Balance', 'Running Balance']]
+
+    st.dataframe(summary_df, use_container_width=True)
+
+    # Download button for the summary table
+    summary_excel_buffer = io.BytesIO()
+    summary_df.to_excel(summary_excel_buffer, index=False, engine='xlsxwriter')
+    summary_excel_buffer.seek(0)
+    st.download_button(
+        label="Download Ringkasan Klaster",
+        data=summary_excel_buffer,
+        file_name='ringkasan_klaster.xlsx',
+        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        help='Klik untuk mengunduh ringkasan saldo klaster dalam format Excel.'
+    )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+else:
+    st.info("Pilih rentang tanggal untuk menampilkan data yang difilter dan scorecard.")
