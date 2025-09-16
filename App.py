@@ -35,10 +35,6 @@ def load_data(_client, _query):
 # Streamlit App UI
 st.title("Finpay Topup Data Dashboard")
 
-if st.button("Clear Cache"):
-    st.cache_data.clear()
-    st.experimental_rerun()
-
 # Load data
 df = load_data(client, query)
 
