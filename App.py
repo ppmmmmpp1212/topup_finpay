@@ -87,7 +87,24 @@ with st.expander("Lihat Raw Data"):
     )
 
 # ---
+## Scorecard
+col1, col2, col3 = st.columns(3)
+
+# Calculate total credit
+total_kredit = df[df['TransactionType'] == 'Kredit']['Amount'].sum()
+col1.metric("Total Kredit", f"Rp {total_kredit:,.0f}")
+
+# Calculate total debit
+total_debit = df[df['TransactionType'] == 'Debit']['Amount'].sum()
+col2.metric("Total Debit", f"Rp {total_debit:,.0f}")
+
+# Calculate and display running balance
+current_balance = total_kredit - total_debit
+col3.metric("Running Balance (Semua Data)", f"Rp {current_balance:,.0f}")
+
+# ---
 ## Daily Debit and Credit Amounts Chart
+
 if not df['TransactionDate'].dropna().empty:
     daily_summary = df.groupby([df['TransactionDate'].dt.date, 'TransactionType'])['Amount'].sum().unstack(fill_value=0)
     
