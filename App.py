@@ -300,7 +300,7 @@ if len(date_range) == 2:
     # ---
     ## Summary Table of All Clusters (New location)
     st.markdown("<br>", unsafe_allow_html=True)
-     st.markdown(
+    st.markdown(
             """
             <h2 style='text-align: center;'>Ringkasan Saldo Berdasarkan Cluster
             </h2>
