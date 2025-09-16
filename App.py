@@ -265,7 +265,13 @@ if len(date_range) == 2:
         final_filtered_df['RunningSaldo'] = saldo_awal + final_filtered_df['NetChange'].cumsum()
         st.markdown("<br>", unsafe_allow_html=True) # Menambahkan baris kosong menggunakan HTML
         st.markdown("<br>", unsafe_allow_html=True) # Menambahkan baris kosong menggunakan HTML
-        st.subheader("Filtered Data with Running Balance")
+        st.markdown(
+        """
+        <h2 style='text-align: center;'>Filtered Data with Running Balance
+        </h2>
+        """,
+        unsafe_allow_html=True
+    )
         st.dataframe(final_filtered_df, use_container_width=True)
         
         final_balance_display = final_filtered_df['RunningSaldo'].iloc[-1]
