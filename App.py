@@ -115,15 +115,16 @@ if len(date_range) == 2:
         # Sort by date and time to ensure chronological calculation
         filtered_df.sort_values('TransactionDate', ascending=True, inplace=True)
         
-        # Create a new column 'DebitAmount' for calculation
-        # It's 'Amount' if TransactionType is 'Debit', otherwise it's 0
-        filtered_df['DebitAmount'] = filtered_df.apply(
-            lambda row: row['Amount'] if row['TransactionType'] == 'Debit' else 0,
+        # Create a new column 'NetChange' for calculation
+        # It's positive 'Amount' for 'Kredit' and negative 'Amount' for 'Debit'
+        filtered_df['NetChange'] = filtered_df.apply(
+            lambda row: row['Amount'] if row['TransactionType'] == 'Kredit' else 
+                       -row['Amount'] if row['TransactionType'] == 'Debit' else 0,
             axis=1
         )
         
-        # Calculate the cumulative sum of DebitAmount and subtract it from the initial balance
-        filtered_df['RunningSaldo'] = saldo_awal - filtered_df['DebitAmount'].cumsum()
+        # Calculate the cumulative sum of NetChange and add it to the initial balance
+        filtered_df['RunningSaldo'] = saldo_awal + filtered_df['NetChange'].cumsum()
         
         st.subheader("Filtered Data with Running Balance")
         st.dataframe(filtered_df, use_container_width=True)
