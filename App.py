@@ -89,11 +89,11 @@ if 'TransactionDate' in df.columns:
         max_value=max_date
     )
 
-    # Input Saldo Awal
+    # Input Saldo Awal - Sekarang tidak ada nilai default yang statis di sini
     saldo_awal = st.sidebar.number_input(
         "Saldo Awal",
         min_value=0.0,
-        value=8000000.0,
+        value=0.0, # Mengatur nilai default ke 0, pengguna harus menginput
         step=1000.0,
         format="%.0f"
     )
@@ -104,8 +104,8 @@ if 'TransactionDate' in df.columns:
                          (df['TransactionDate'].dt.date <= end_date)].copy()
         
         if 'Amount' in filtered_df.columns and 'TransactionType' in filtered_df.columns:
-            # Urutkan berdasarkan TransactionDate
-            filtered_df.sort_values('TransactionDate', inplace=True)
+            # Urutkan berdasarkan TransactionDate dari yang paling awal
+            filtered_df.sort_values('TransactionDate', ascending=True, inplace=True)
             
             # Buat kolom baru yang akan digunakan untuk kalkulasi
             # Nilai Amount diatur 0 jika TransactionType bukan 'Debit'
