@@ -55,7 +55,7 @@ if not all(col in df.columns for col in required_columns):
 df['TransactionDate'] = pd.to_datetime(df['TransactionDate'], errors='coerce')
 df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
 
-# NEW: Fill missing 'Nama' values with "tanpa_nama"
+# Fill missing 'Nama' values with "tanpa_nama"
 df['Nama'] = df['Nama'].fillna("tanpa_nama")
 
 st.write(f"Rows loaded: {len(df)}")
@@ -104,12 +104,19 @@ date_range = st.sidebar.date_input(
     max_value=max_date
 )
 
-# Name Filter (FIXED)
-unique_names = sorted(df['Nama'].unique())
-selected_names = st.sidebar.multiselect(
-    "Filter by Name",
-    options=unique_names,
-    default=unique_names
+# NEW: Separate Name Filters for Kredit and Debit
+unique_names_kredit = sorted(df[df['TransactionType'] == 'Kredit']['Nama'].unique())
+selected_names_kredit = st.sidebar.multiselect(
+    "Filter by Name (Kredit)",
+    options=unique_names_kredit,
+    default=unique_names_kredit
+)
+
+unique_names_debit = sorted(df[df['TransactionType'] == 'Debit']['Nama'].unique())
+selected_names_debit = st.sidebar.multiselect(
+    "Filter by Name (Debit)",
+    options=unique_names_debit,
+    default=unique_names_debit
 )
 
 # Initial Balance Input
@@ -123,11 +130,15 @@ saldo_awal = st.sidebar.number_input(
 
 if len(date_range) == 2:
     start_date, end_date = date_range
-    
-    # Apply both date and name filters
+
+    # Define filter conditions for Kredit and Debit separately
+    kredit_condition = (df['TransactionType'] == 'Kredit') & (df['Nama'].isin(selected_names_kredit))
+    debit_condition = (df['TransactionType'] == 'Debit') & (df['Nama'].isin(selected_names_debit))
+
+    # Combine date filter and the new name filters
     filtered_df = df[(df['TransactionDate'].dt.date >= start_date) & 
                      (df['TransactionDate'].dt.date <= end_date) & 
-                     (df['Nama'].isin(selected_names))].copy()
+                     (kredit_condition | debit_condition)].copy()
     
     if filtered_df.empty:
         st.warning("No data found for the selected filters.")
