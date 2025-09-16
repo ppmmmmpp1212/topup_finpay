@@ -87,6 +87,66 @@ initial_balances_by_cluster = {
 }
 
 # ---
+## Raw Data Display (Hidden by Default)
+
+with st.expander("Lihat Raw Data"):
+    st.dataframe(df, use_container_width=True)
+
+    # Convert DataFrame to Excel format
+    excel_buffer = io.BytesIO()
+    df.to_excel(excel_buffer, index=False, engine='xlsxwriter')
+    excel_buffer.seek(0)
+    
+    st.download_button(
+        label="Download Data Mentah",
+        data=excel_buffer,
+        file_name='data_finpay_mentah.xlsx',
+        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        help='Klik untuk mengunduh seluruh data dalam format Excel.'
+    )
+
+# ---
+## Daily Debit and Credit Amounts Chart
+
+if not df['TransactionDate'].dropna().empty:
+    daily_summary = df.groupby([df['TransactionDate'].dt.date, 'TransactionType'])['Amount'].sum().unstack(fill_value=0)
+    
+    if not daily_summary.empty:
+        fig = go.Figure()
+        
+        # Add a trace for Credit amounts
+        if 'Kredit' in daily_summary.columns:
+            fig.add_trace(
+                go.Scatter(
+                    x=daily_summary.index,
+                    y=daily_summary['Kredit'],
+                    mode='lines+markers',
+                    name='Kredit'
+                )
+            )
+
+        # Add a trace for Debit amounts
+        if 'Debit' in daily_summary.columns:
+            fig.add_trace(
+                go.Scatter(
+                    x=daily_summary.index,
+                    y=daily_summary['Debit'],
+                    mode='lines+markers',
+                    name='Debit'
+                )
+            )
+        
+        fig.update_layout(
+            title="Daily Debit and Credit Amounts",
+            xaxis_title="Date",
+            yaxis_title="Amount (Rp)",
+            template="plotly_dark"
+        )
+        st.plotly_chart(fig)
+    else:
+        st.warning("Tidak ada data untuk menampilkan grafik jumlah debit/kredit harian.")
+
+# ---
 ## Summary Table of All Clusters
 
 st.subheader("Ringkasan Saldo Berdasarkan Klaster (Semua Data)")
@@ -134,25 +194,6 @@ st.download_button(
 )
 
 st.markdown("<br>", unsafe_allow_html=True)
-
-# ---
-## Raw Data Display (Hidden by Default)
-
-with st.expander("Lihat Raw Data"):
-    st.dataframe(df, use_container_width=True)
-
-    # Convert DataFrame to Excel format
-    excel_buffer = io.BytesIO()
-    df.to_excel(excel_buffer, index=False, engine='xlsxwriter')
-    excel_buffer.seek(0)
-    
-    st.download_button(
-        label="Download Data Mentah",
-        data=excel_buffer,
-        file_name='data_finpay_mentah.xlsx',
-        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        help='Klik untuk mengunduh seluruh data dalam format Excel.'
-    )
 
 st.sidebar.header("Data Filters & Settings")
 
