@@ -35,6 +35,10 @@ def load_data(_client, _query):
 # Streamlit App UI
 st.title("Finpay Topup Data Dashboard")
 
+if st.button("Clear Cache"):
+    st.cache_data.clear()
+    st.experimental_rerun()
+
 # Load data
 df = load_data(client, query)
 
@@ -43,7 +47,7 @@ if df.empty:
     st.stop()
 
 # Data preprocessing
-required_columns = ['TransactionDate', 'Amount', 'TransactionType']
+required_columns = ['TransactionDate', 'Amount', 'TransactionType', 'Nama']
 if not all(col in df.columns for col in required_columns):
     st.error(f"Required columns {required_columns} not found in the data.")
     st.stop()
@@ -86,9 +90,10 @@ if not df['TransactionDate'].dropna().empty:
 ## Running Balance Calculation
 
 st.sidebar.header("Data Filters & Settings")
+
+# Date Filter
 min_date = df['TransactionDate'].min().date()
 max_date = df['TransactionDate'].max().date()
-
 date_range = st.sidebar.date_input(
     "Select Date Range",
     [min_date, max_date],
@@ -96,6 +101,15 @@ date_range = st.sidebar.date_input(
     max_value=max_date
 )
 
+# Name Filter (NEW)
+unique_names = sorted(df['Nama'].unique())
+selected_names = st.sidebar.multiselect(
+    "Filter by Name",
+    options=unique_names,
+    default=unique_names # Default selection is all names
+)
+
+# Initial Balance Input
 saldo_awal = st.sidebar.number_input(
     "Initial Balance",
     min_value=0.0,
@@ -106,17 +120,19 @@ saldo_awal = st.sidebar.number_input(
 
 if len(date_range) == 2:
     start_date, end_date = date_range
+    
+    # Apply both date and name filters
     filtered_df = df[(df['TransactionDate'].dt.date >= start_date) & 
-                     (df['TransactionDate'].dt.date <= end_date)].copy()
+                     (df['TransactionDate'].dt.date <= end_date) & 
+                     (df['Nama'].isin(selected_names))].copy()
     
     if filtered_df.empty:
-        st.warning("No data found for the selected date range.")
+        st.warning("No data found for the selected filters.")
     else:
         # Sort by date and time to ensure chronological calculation
         filtered_df.sort_values('TransactionDate', ascending=True, inplace=True)
         
         # Create a new column 'NetChange' for calculation
-        # It's positive 'Amount' for 'Kredit' and negative 'Amount' for 'Debit'
         filtered_df['NetChange'] = filtered_df.apply(
             lambda row: row['Amount'] if row['TransactionType'] == 'Kredit' else 
                        -row['Amount'] if row['TransactionType'] == 'Debit' else 0,
