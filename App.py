@@ -38,13 +38,12 @@ def load_data(_client, _query):
 
 # Streamlit App UI
 st.markdown(
-        """
-        <h1 style='text-align: center;'>Monitoring Finpay Topup Dashboard
-
-        </h1>
-        """,
-        unsafe_allow_html=True
-    )
+    """
+    <h1 style='text-align: center;'>Monitoring Finpay Topup Dashboard
+    </h1>
+    """,
+    unsafe_allow_html=True
+)
 
 if st.button("Clear Cache"):
     st.cache_data.clear()
@@ -263,16 +262,30 @@ if len(date_range) == 2:
         
         # Calculate the cumulative sum of NetChange and add it to the initial balance
         final_filtered_df['RunningSaldo'] = saldo_awal + final_filtered_df['NetChange'].cumsum()
+        
         st.markdown("<br>", unsafe_allow_html=True) # Menambahkan baris kosong menggunakan HTML
         st.markdown("<br>", unsafe_allow_html=True) # Menambahkan baris kosong menggunakan HTML
         st.markdown(
-        """
-        <h2 style='text-align: center;'>Filtered Data with Running Balance
-        </h2>
-        """,
-        unsafe_allow_html=True
-    )
+            """
+            <h2 style='text-align: center;'>Filtered Data with Running Balance
+            </h2>
+            """,
+            unsafe_allow_html=True
+        )
         st.dataframe(final_filtered_df, use_container_width=True)
+
+        # NEW: Download button for filtered data
+        excel_buffer_filtered = io.BytesIO()
+        final_filtered_df.to_excel(excel_buffer_filtered, index=False, engine='xlsxwriter')
+        excel_buffer_filtered.seek(0)
+        
+        st.download_button(
+            label="Download Filtered Data",
+            data=excel_buffer_filtered,
+            file_name='data_finpay_filtered.xlsx',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            help='Klik untuk mengunduh data yang sudah difilter dalam format Excel.'
+        )
         
         final_balance_display = final_filtered_df['RunningSaldo'].iloc[-1]
         st.markdown(f"**Final Balance: Rp {final_balance_display:,.0f}**")
