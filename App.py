@@ -45,7 +45,9 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-
+if st.button("Clear Cache"):
+    st.cache_data.clear()
+    st.experimental_rerun()
 
 # Load data
 df = load_data(client, query)
@@ -196,21 +198,25 @@ date_range = st.sidebar.date_input(
     max_value=max_date
 )
 
-# Initial Balance Input
-saldo_awal = st.sidebar.number_input(
-    "Initial Balance",
-    min_value=0.0,
-    value=0.0,
-    step=1000.0,
-    format="%.0f"
-)
-
 # ---
 ## Interactive Scorecards (New Location)
 col1, col2, col3 = st.columns(3)
 
 if len(date_range) == 2:
     start_date, end_date = date_range
+
+    # Define the initial balances based on ClusterID
+    initial_balances_by_cluster = {
+        '411311': 33725650,
+        '421315': 8270000,
+        '421318': 22681438,
+        '421320': 52467000,
+        '421307': 64689000,
+        '421306': 48291500,
+    }
+    
+    # Calculate the dynamic saldo_awal based on selected ClusterIDs
+    saldo_awal = sum(initial_balances_by_cluster.get(cid, 0) for cid in selected_cluster_ids)
 
     # Apply date filter on the already-filtered dataframe
     final_filtered_df = filtered_df[(filtered_df['TransactionDate'].dt.date >= start_date) & 
