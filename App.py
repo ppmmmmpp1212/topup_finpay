@@ -90,40 +90,6 @@ with st.expander("Lihat Raw Data"):
     )
 
 # ---
-## Scorecard
-col1, col2, col3 = st.columns(3)
-
-# Calculate total credit
-total_kredit = df[df['TransactionType'] == 'Kredit']['Amount'].sum()
-# Calculate total debit
-total_debit = df[df['TransactionType'] == 'Debit']['Amount'].sum()
-# Calculate running balance
-current_balance = total_kredit - total_debit
-
-def create_card(title, value):
-    return f"""
-        <div style="
-            background-color: #F0F2F6;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2);
-            text-align: center;
-        ">
-            <h4 style="margin: 0; color: #333;">{title}</h4>
-            <h2 style="margin: 10px 0 0; color: #0078A1;">Rp {value:,.0f}</h2>
-        </div>
-    """
-
-with col1:
-    st.markdown(create_card("Total Kredit", total_kredit), unsafe_allow_html=True)
-
-with col2:
-    st.markdown(create_card("Total Debit", total_debit), unsafe_allow_html=True)
-
-with col3:
-    st.markdown(create_card("Running Balance (Semua Data)", current_balance), unsafe_allow_html=True)
-
-# ---
 ## Daily Debit and Credit Amounts Chart
 
 if not df['TransactionDate'].dropna().empty:
@@ -235,31 +201,64 @@ saldo_awal = st.sidebar.number_input(
     format="%.0f"
 )
 
+# ---
+## Interactive Scorecards (New Location)
+col1, col2, col3 = st.columns(3)
+
 if len(date_range) == 2:
     start_date, end_date = date_range
-    
+
     # Apply date filter on the already-filtered dataframe
-    filtered_df = filtered_df[(filtered_df['TransactionDate'].dt.date >= start_date) & 
-                             (filtered_df['TransactionDate'].dt.date <= end_date)].copy()
+    final_filtered_df = filtered_df[(filtered_df['TransactionDate'].dt.date >= start_date) & 
+                                    (filtered_df['TransactionDate'].dt.date <= end_date)].copy()
     
-    if filtered_df.empty:
+    # Calculate values for scorecards
+    total_debit_filtered = final_filtered_df[final_filtered_df['TransactionType'] == 'Debit']['Amount'].sum()
+    total_kredit_filtered = final_filtered_df[final_filtered_df['TransactionType'] == 'Kredit']['Amount'].sum()
+    
+    final_balance_value = saldo_awal + (total_kredit_filtered - total_debit_filtered)
+
+    def create_card(title, value):
+        return f"""
+            <div style="
+                background-color: #F0F2F6;
+                padding: 15px; /* Reduced padding */
+                border-radius: 8px; /* Slightly smaller border-radius */
+                box-shadow: 0 4px 6px 0 rgba(0, 0, 0, 0.1); /* Reduced shadow */
+                text-align: center;
+            ">
+                <h5 style="margin: 0; color: #555;">{title}</h5>
+                <h3 style="margin: 5px 0 0; color: #0078A1;">Rp {value:,.0f}</h3>
+            </div>
+        """
+
+    with col1:
+        st.markdown(create_card("Total Kredit", total_kredit_filtered), unsafe_allow_html=True)
+
+    with col2:
+        st.markdown(create_card("Total Debit", total_debit_filtered), unsafe_allow_html=True)
+
+    with col3:
+        st.markdown(create_card("Running Balance", final_balance_value), unsafe_allow_html=True)
+
+    if final_filtered_df.empty:
         st.warning("No data found for the selected filters.")
     else:
         # Sort by date and time to ensure chronological calculation
-        filtered_df.sort_values('TransactionDate', ascending=True, inplace=True)
+        final_filtered_df.sort_values('TransactionDate', ascending=True, inplace=True)
         
         # Create a new column 'NetChange' for calculation
-        filtered_df['NetChange'] = filtered_df.apply(
+        final_filtered_df['NetChange'] = final_filtered_df.apply(
             lambda row: row['Amount'] if row['TransactionType'] == 'Kredit' else 
                        -row['Amount'] if row['TransactionType'] == 'Debit' else 0,
             axis=1
         )
         
         # Calculate the cumulative sum of NetChange and add it to the initial balance
-        filtered_df['RunningSaldo'] = saldo_awal + filtered_df['NetChange'].cumsum()
+        final_filtered_df['RunningSaldo'] = saldo_awal + final_filtered_df['NetChange'].cumsum()
         
         st.subheader("Filtered Data with Running Balance")
-        st.dataframe(filtered_df, use_container_width=True)
+        st.dataframe(final_filtered_df, use_container_width=True)
         
-        final_balance = filtered_df['RunningSaldo'].iloc[-1]
-        st.markdown(f"**Final Balance: Rp {final_balance:,.0f}**")
+        final_balance_display = final_filtered_df['RunningSaldo'].iloc[-1]
+        st.markdown(f"**Final Balance: Rp {final_balance_display:,.0f}**")
