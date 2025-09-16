@@ -300,7 +300,13 @@ if len(date_range) == 2:
     # ---
     ## Summary Table of All Clusters (New location)
     st.markdown("<br>", unsafe_allow_html=True)
-    st.subheader("Ringkasan Saldo Berdasarkan Klaster (Semua Data)")
+     st.markdown(
+            """
+            <h2 style='text-align: center;'>Ringkasan Saldo Berdasarkan Cluster
+            </h2>
+            """,
+            unsafe_allow_html=True
+        )
 
     # Create a summary DataFrame
     summary_df = df.groupby('ClusterID')['Amount'].sum().reset_index()
