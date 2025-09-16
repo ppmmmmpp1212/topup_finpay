@@ -39,16 +39,16 @@ st.subheader("Data dari BigQuery")
 st.dataframe(df)
 
 # Contoh visualisasi sederhana (misalnya, jumlah transaksi per tanggal)
-# Ganti 'transaction_date' dengan nama kolom tanggal yang sesuai di tabel Anda
-if 'transaction_date' in df.columns:
-    df['transaction_date'] = pd.to_datetime(df['transaction_date'])
-    daily_counts = df.groupby(df['transaction_date'].dt.date).size().reset_index(name='count')
+# Ganti 'TransactionDate' dengan nama kolom tanggal yang sesuai di tabel Anda
+if 'TransactionDate' in df.columns:
+    df['TransactionDate'] = pd.to_datetime(df['TransactionDate'])
+    daily_counts = df.groupby(df['TransactionDate'].dt.date).size().reset_index(name='count')
 
     # Membuat plot dengan Plotly
     fig = go.Figure()
     fig.add_trace(
         go.Scatter(
-            x=daily_counts['transaction_date'],
+            x=daily_counts['TransactionDate'],
             y=daily_counts['count'],
             mode='lines+markers',
             name='Jumlah Transaksi'
@@ -62,13 +62,13 @@ if 'transaction_date' in df.columns:
     )
     st.plotly_chart(fig)
 else:
-    st.warning("Kolom 'transaction_date' tidak ditemukan. Silakan sesuaikan nama kolom untuk visualisasi.")
+    st.warning("Kolom 'TransactionDate' tidak ditemukan. Silakan sesuaikan nama kolom untuk visualisasi.")
 
 # Sidebar untuk filter (opsional)
 st.sidebar.header("Filter Data")
-if 'transaction_date' in df.columns:
-    min_date = df['transaction_date'].min().date()
-    max_date = df['transaction_date'].max().date()
+if 'TransactionDate' in df.columns:
+    min_date = df['TransactionDate'].min().date()
+    max_date = df['TransactionDate'].max().date()
     date_range = st.sidebar.date_input(
         "Pilih Rentang Tanggal",
         [min_date, max_date],
@@ -77,7 +77,7 @@ if 'transaction_date' in df.columns:
     )
     if len(date_range) == 2:
         start_date, end_date = date_range
-        filtered_df = df[(df['transaction_date'].dt.date >= start_date) & 
-                        (df['transaction_date'].dt.date <= end_date)]
+        filtered_df = df[(df['TransactionDate'].dt.date >= start_date) & 
+                        (df['TransactionDate'].dt.date <= end_date)]
         st.subheader("Data Tabel yang Difilter")
         st.dataframe(filtered_df)
