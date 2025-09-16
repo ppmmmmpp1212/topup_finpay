@@ -54,13 +54,9 @@ if not all(col in df.columns for col in required_columns):
     st.stop()
 
 df['TransactionDate'] = pd.to_datetime(df['TransactionDate'], errors='coerce')
-
-# Alternative fix to remove timezone information
-# This works on all versions of Pandas
 try:
     df['TransactionDate'] = df['TransactionDate'].dt.tz_localize(None)
 except TypeError:
-    # If the column is already timezone-unaware, this will do nothing
     pass
 
 df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
@@ -91,27 +87,44 @@ with st.expander("Lihat Raw Data"):
     )
 
 # ---
-## Daily Transaction Count Chart
-
+## Daily Debit and Credit Amounts Chart
 if not df['TransactionDate'].dropna().empty:
-    daily_counts = df.groupby(df['TransactionDate'].dt.date).size().reset_index(name='count')
+    daily_summary = df.groupby([df['TransactionDate'].dt.date, 'TransactionType'])['Amount'].sum().unstack(fill_value=0)
     
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=daily_counts['TransactionDate'],
-            y=daily_counts['count'],
-            mode='lines+markers',
-            name='Daily Transaction Count'
+    if not daily_summary.empty:
+        fig = go.Figure()
+        
+        # Add a trace for Credit amounts
+        if 'Kredit' in daily_summary.columns:
+            fig.add_trace(
+                go.Scatter(
+                    x=daily_summary.index,
+                    y=daily_summary['Kredit'],
+                    mode='lines+markers',
+                    name='Kredit'
+                )
+            )
+
+        # Add a trace for Debit amounts
+        if 'Debit' in daily_summary.columns:
+            fig.add_trace(
+                go.Scatter(
+                    x=daily_summary.index,
+                    y=daily_summary['Debit'],
+                    mode='lines+markers',
+                    name='Debit'
+                )
+            )
+        
+        fig.update_layout(
+            title="Daily Debit and Credit Amounts",
+            xaxis_title="Date",
+            yaxis_title="Amount (Rp)",
+            template="plotly_dark"
         )
-    )
-    fig.update_layout(
-        title="Daily Transaction Count",
-        xaxis_title="Date",
-        yaxis_title="Count",
-        template="plotly_dark"
-    )
-    st.plotly_chart(fig)
+        st.plotly_chart(fig)
+    else:
+        st.warning("Tidak ada data untuk menampilkan grafik jumlah debit/kredit harian.")
 
 # ---
 ## Running Balance Calculation
