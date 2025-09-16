@@ -3,135 +3,130 @@ from google.cloud import bigquery
 from google.oauth2 import service_account
 import pandas as pd
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-from datetime import datetime, date
 import json
-import io
+from datetime import date
 
-# Mengambil credentials dari Streamlit secrets
-credentials_json = st.secrets["bigquery"]["credentials"]
-credentials = service_account.Credentials.from_service_account_info(json.loads(credentials_json))
+# Fetch credentials from Streamlit secrets
+try:
+    credentials_json = st.secrets["bigquery"]["credentials"]
+    credentials = service_account.Credentials.from_service_account_info(json.loads(credentials_json))
+    client = bigquery.Client(credentials=credentials, project=credentials.project_id)
+except Exception as e:
+    st.error(f"Error loading BigQuery credentials: {e}")
+    st.stop()
 
-# Inisialisasi BigQuery client
-client = bigquery.Client(credentials=credentials, project=credentials.project_id)
-
-# Query ke tabel BigQuery tanpa batasan LIMIT
+# BigQuery query to fetch all data
 query = """
 SELECT *
 FROM `alfred-analytics-406004.analytics_alfred.finpay_topup_joined`
 """
 
-# Menjalankan query dan mengubah hasil ke DataFrame
 @st.cache_data
 def load_data(_client, _query):
-    query_job = _client.query(_query)
-    return query_job.to_dataframe()
+    """Loads data from BigQuery into a Pandas DataFrame."""
+    try:
+        query_job = _client.query(_query)
+        df_result = query_job.to_dataframe()
+        return df_result
+    except Exception as e:
+        st.error(f"Error executing BigQuery query: {e}")
+        return pd.DataFrame()
 
-# Tombol untuk membersihkan cache
+# Streamlit App UI
+st.title("Finpay Topup Data Dashboard")
+
 if st.button("Clear Cache"):
     st.cache_data.clear()
-    st.success("Cache telah dihapus. Muat ulang data...")
+    st.experimental_rerun()
 
-# Memuat data
+# Load data
 df = load_data(client, query)
 
-# Konversi TransactionDate ke datetime jika ada
-if 'TransactionDate' in df.columns:
-    df['TransactionDate'] = pd.to_datetime(df['TransactionDate'])
+if df.empty:
+    st.warning("No data loaded from BigQuery. Please check the connection and table.")
+    st.stop()
 
-# Konversi Amount ke numeric jika ada
-if 'Amount' in df.columns:
-    df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
+# Data preprocessing
+required_columns = ['TransactionDate', 'Amount', 'TransactionType']
+if not all(col in df.columns for col in required_columns):
+    st.error(f"Required columns {required_columns} not found in the data.")
+    st.stop()
 
-# Menampilkan jumlah baris yang dimuat
-st.write(f"Jumlah baris yang dimuat: {len(df)}")
+df['TransactionDate'] = pd.to_datetime(df['TransactionDate'], errors='coerce')
+df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
 
-# Menampilkan judul aplikasi
-st.title("Dashboard Finpay Topup Data")
+st.write(f"Rows loaded: {len(df)}")
+st.subheader("Raw Data from BigQuery")
+st.dataframe(df.head(100), use_container_width=True)
 
-# Menampilkan data dalam tabel
-st.subheader("Data dari BigQuery")
-st.dataframe(df, use_container_width=True)
+# ---
+## Daily Transaction Count Chart
 
-# Contoh visualisasi sederhana (misalnya, jumlah transaksi per tanggal)
-if 'TransactionDate' in df.columns:
+if not df['TransactionDate'].dropna().empty:
     daily_counts = df.groupby(df['TransactionDate'].dt.date).size().reset_index(name='count')
-
-    # Membuat plot dengan Plotly
+    
     fig = go.Figure()
     fig.add_trace(
         go.Scatter(
             x=daily_counts['TransactionDate'],
             y=daily_counts['count'],
             mode='lines+markers',
-            name='Jumlah Transaksi'
+            name='Daily Transaction Count'
         )
     )
     fig.update_layout(
-        title="Jumlah Transaksi Harian",
-        xaxis_title="Tanggal",
-        yaxis_title="Jumlah Transaksi",
+        title="Daily Transaction Count",
+        xaxis_title="Date",
+        yaxis_title="Count",
         template="plotly_dark"
     )
     st.plotly_chart(fig)
-else:
-    st.warning("Kolom 'TransactionDate' tidak ditemukan. Silakan sesuaikan nama kolom untuk visualisasi.")
 
-# Sidebar untuk filter (opsional)
-st.sidebar.header("Filter Data")
-if 'TransactionDate' in df.columns:
-    min_date = df['TransactionDate'].min().date()
-    max_date = df['TransactionDate'].max().date()
-    date_range = st.sidebar.date_input(
-        "Pilih Rentang Tanggal",
-        [min_date, max_date],
-        min_value=min_date,
-        max_value=max_date
-    )
+# ---
+## Running Balance Calculation
 
-    # Input Saldo Awal - Sekarang tidak ada nilai default yang statis di sini
-    saldo_awal = st.sidebar.number_input(
-        "Saldo Awal",
-        min_value=0.0,
-        value=0.0, # Mengatur nilai default ke 0, pengguna harus menginput
-        step=1000.0,
-        format="%.0f"
-    )
+st.sidebar.header("Data Filters & Settings")
+min_date = df['TransactionDate'].min().date()
+max_date = df['TransactionDate'].max().date()
 
-    if len(date_range) == 2:
-        start_date, end_date = date_range
-        filtered_df = df[(df['TransactionDate'].dt.date >= start_date) & 
-                         (df['TransactionDate'].dt.date <= end_date)].copy()
+date_range = st.sidebar.date_input(
+    "Select Date Range",
+    [min_date, max_date],
+    min_value=min_date,
+    max_value=max_date
+)
+
+saldo_awal = st.sidebar.number_input(
+    "Initial Balance",
+    min_value=0.0,
+    value=0.0,
+    step=1000.0,
+    format="%.0f"
+)
+
+if len(date_range) == 2:
+    start_date, end_date = date_range
+    filtered_df = df[(df['TransactionDate'].dt.date >= start_date) & 
+                     (df['TransactionDate'].dt.date <= end_date)].copy()
+    
+    if filtered_df.empty:
+        st.warning("No data found for the selected date range.")
+    else:
+        # Sort by date and time to ensure chronological calculation
+        filtered_df.sort_values('TransactionDate', ascending=True, inplace=True)
         
-        if 'Amount' in filtered_df.columns and 'TransactionType' in filtered_df.columns:
-            # Urutkan berdasarkan TransactionDate dari yang paling awal
-            filtered_df.sort_values('TransactionDate', ascending=True, inplace=True)
-            
-            # Buat kolom baru yang akan digunakan untuk kalkulasi
-            # Nilai Amount diatur 0 jika TransactionType bukan 'Debit'
-            filtered_df['DebitAmount'] = filtered_df.apply(
-                lambda row: row['Amount'] if row['TransactionType'] == 'Debit' else 0,
-                axis=1
-            )
-            
-            # Kalkulasi running saldo (mengurangi DebitAmount secara kumulatif)
-            filtered_df['RunningSaldo'] = saldo_awal - filtered_df['DebitAmount'].cumsum()
-            
-            st.subheader("Data Tabel yang Difilter dengan Running Saldo (Debit Only)")
-            st.dataframe(filtered_df, use_container_width=True)
-            
-            if not filtered_df.empty:
-                sisa_saldo = filtered_df['RunningSaldo'].iloc[-1]
-            else:
-                sisa_saldo = saldo_awal
-            st.write(f"Sisa Saldo Akhir: {sisa_saldo:,.0f}")
-        elif 'Amount' not in filtered_df.columns:
-            st.warning("Kolom 'Amount' tidak ditemukan. Tidak dapat melakukan kalkulasi saldo.")
-            st.subheader("Data Tabel yang Difilter")
-            st.dataframe(filtered_df, use_container_width=True)
-        elif 'TransactionType' not in filtered_df.columns:
-            st.warning("Kolom 'TransactionType' tidak ditemukan. Tidak dapat melakukan kalkulasi saldo sesuai tipe transaksi.")
-            st.subheader("Data Tabel yang Difilter")
-            st.dataframe(filtered_df, use_container_width=True)
-else:
-    st.warning("Kolom 'TransactionDate' tidak ditemukan. Silakan sesuaikan nama kolom untuk visualisasi.")
+        # Create a new column 'DebitAmount' for calculation
+        # It's 'Amount' if TransactionType is 'Debit', otherwise it's 0
+        filtered_df['DebitAmount'] = filtered_df.apply(
+            lambda row: row['Amount'] if row['TransactionType'] == 'Debit' else 0,
+            axis=1
+        )
+        
+        # Calculate the cumulative sum of DebitAmount and subtract it from the initial balance
+        filtered_df['RunningSaldo'] = saldo_awal - filtered_df['DebitAmount'].cumsum()
+        
+        st.subheader("Filtered Data with Running Balance")
+        st.dataframe(filtered_df, use_container_width=True)
+        
+        final_balance = filtered_df['RunningSaldo'].iloc[-1]
+        st.markdown(f"**Final Balance: Rp {final_balance:,.0f}**")
