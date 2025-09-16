@@ -55,8 +55,6 @@ if not all(col in df.columns for col in required_columns):
 df['TransactionDate'] = pd.to_datetime(df['TransactionDate'], errors='coerce')
 df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
 df['Nama'] = df['Nama'].fillna("tanpa_nama")
-
-# Add fillna for new filter columns to handle potential missing values
 df['TransactionType'] = df['TransactionType'].fillna("tanpa_tipe")
 df['ClusterID'] = df['ClusterID'].fillna("tanpa_cluster").astype(str)
 df['Sender'] = df['Sender'].fillna("tanpa_sender")
@@ -97,46 +95,61 @@ if not df['TransactionDate'].dropna().empty:
 
 st.sidebar.header("Data Filters & Settings")
 
-# Date Filter
-min_date = df['TransactionDate'].min().date()
-max_date = df['TransactionDate'].max().date()
+# Create a filtered dataframe to be used by all subsequent filters
+filtered_df = df.copy()
+
+# 1. TransactionType Filter
+unique_transaction_types = sorted(filtered_df['TransactionType'].unique())
+selected_transaction_types = st.sidebar.multiselect(
+    "1. Filter by Transaction Type",
+    options=unique_transaction_types,
+    default=unique_transaction_types
+)
+
+# Filter the dataframe based on the first selection
+filtered_df = filtered_df[filtered_df['TransactionType'].isin(selected_transaction_types)]
+
+# 2. ClusterID Filter (cascading)
+unique_cluster_ids = sorted(filtered_df['ClusterID'].unique())
+selected_cluster_ids = st.sidebar.multiselect(
+    "2. Filter by Cluster ID",
+    options=unique_cluster_ids,
+    default=unique_cluster_ids
+)
+
+# Filter the dataframe based on the second selection
+filtered_df = filtered_df[filtered_df['ClusterID'].isin(selected_cluster_ids)]
+
+# 3. Sender Filter (cascading)
+unique_senders = sorted(filtered_df['Sender'].unique())
+selected_senders = st.sidebar.multiselect(
+    "3. Filter by Sender",
+    options=unique_senders,
+    default=unique_senders
+)
+
+# Filter the dataframe based on the third selection
+filtered_df = filtered_df[filtered_df['Sender'].isin(selected_senders)]
+
+# 4. Name Filter (cascading)
+unique_names = sorted(filtered_df['Nama'].unique())
+selected_names = st.sidebar.multiselect(
+    "4. Filter by Name",
+    options=unique_names,
+    default=unique_names
+)
+
+# Filter the dataframe based on the fourth selection
+filtered_df = filtered_df[filtered_df['Nama'].isin(selected_names)].copy()
+
+# Date Filter (applied last for final display)
+min_date = filtered_df['TransactionDate'].min().date() if not filtered_df.empty else date.today()
+max_date = filtered_df['TransactionDate'].max().date() if not filtered_df.empty else date.today()
 date_range = st.sidebar.date_input(
     "Select Date Range",
     [min_date, max_date],
     min_value=min_date,
     max_value=max_date
-)
-
-# Name Filter
-unique_names = sorted(df['Nama'].unique())
-selected_names = st.sidebar.multiselect(
-    "Filter by Name",
-    options=unique_names,
-    default=unique_names
-)
-
-# NEW: TransactionType Filter
-unique_transaction_types = sorted(df['TransactionType'].unique())
-selected_transaction_types = st.sidebar.multiselect(
-    "Filter by Transaction Type",
-    options=unique_transaction_types,
-    default=unique_transaction_types
-)
-
-# NEW: ClusterID Filter
-unique_cluster_ids = sorted(df['ClusterID'].unique())
-selected_cluster_ids = st.sidebar.multiselect(
-    "Filter by Cluster ID",
-    options=unique_cluster_ids,
-    default=unique_cluster_ids
-)
-
-# NEW: Sender Filter
-unique_senders = sorted(df['Sender'].unique())
-selected_senders = st.sidebar.multiselect(
-    "Filter by Sender",
-    options=unique_senders,
-    default=unique_senders
 )
 
 # Initial Balance Input
@@ -151,13 +164,9 @@ saldo_awal = st.sidebar.number_input(
 if len(date_range) == 2:
     start_date, end_date = date_range
     
-    # Apply all filters
-    filtered_df = df[(df['TransactionDate'].dt.date >= start_date) & 
-                     (df['TransactionDate'].dt.date <= end_date) & 
-                     (df['Nama'].isin(selected_names)) &
-                     (df['TransactionType'].isin(selected_transaction_types)) &
-                     (df['ClusterID'].isin(selected_cluster_ids)) &
-                     (df['Sender'].isin(selected_senders))].copy()
+    # Apply date filter on the already-filtered dataframe
+    filtered_df = filtered_df[(filtered_df['TransactionDate'].dt.date >= start_date) & 
+                             (filtered_df['TransactionDate'].dt.date <= end_date)].copy()
     
     if filtered_df.empty:
         st.warning("No data found for the selected filters.")
