@@ -5,6 +5,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import json
 from datetime import date
+import io
 
 # Fetch credentials from Streamlit secrets
 try:
@@ -33,7 +34,7 @@ def load_data(_client, _query):
         return pd.DataFrame()
 
 # Streamlit App UI
-st.title("Finpay Topup Data Dashboard")
+st.title("Monitoring Finpay Topup Dashboard")
 
 if st.button("Clear Cache"):
     st.cache_data.clear()
@@ -59,13 +60,26 @@ df['TransactionType'] = df['TransactionType'].fillna("tanpa_tipe")
 df['ClusterID'] = df['ClusterID'].fillna("tanpa_cluster").astype(str)
 df['Sender'] = df['Sender'].fillna("tanpa_sender")
 
-st.write(f"Rows loaded: {len(df)}")
+st.write(f"Total Baris data: {len(df)}")
 
 # ---
 ## Raw Data Display (Hidden by Default)
 
-with st.expander("Show Raw Data from BigQuery"):
-    st.dataframe(df.head(100), use_container_width=True)
+with st.expander("Lihat Raw Data"):
+    st.dataframe(df, use_container_width=True)
+
+    # Convert DataFrame to Excel format
+    excel_buffer = io.BytesIO()
+    df.to_excel(excel_buffer, index=False, engine='xlsxwriter')
+    excel_buffer.seek(0)
+    
+    st.download_button(
+        label="Download Data Mentah",
+        data=excel_buffer,
+        file_name='data_finpay_mentah.xlsx',
+        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        help='Klik untuk mengunduh seluruh data dalam format Excel.'
+    )
 
 # ---
 ## Daily Transaction Count Chart
