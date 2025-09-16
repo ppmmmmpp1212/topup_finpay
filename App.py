@@ -256,7 +256,8 @@ if len(date_range) == 2:
         
         # Calculate the cumulative sum of NetChange and add it to the initial balance
         final_filtered_df['RunningSaldo'] = saldo_awal + final_filtered_df['NetChange'].cumsum()
-        
+        st.markdown("<br>", unsafe_allow_html=True) # Menambahkan baris kosong menggunakan HTML
+        st.markdown("<br>", unsafe_allow_html=True) # Menambahkan baris kosong menggunakan HTML
         st.subheader("Filtered Data with Running Balance")
         st.dataframe(final_filtered_df, use_container_width=True)
         
