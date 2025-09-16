@@ -144,22 +144,23 @@ selected_names = st.sidebar.multiselect(
 # Filter the dataframe based on the fourth selection
 filtered_df = filtered_df[filtered_df['Nama'].isin(selected_names)].copy()
 
-# Date Filter (now with single/range option)
-date_filter_mode = st.sidebar.radio("Select Date Filter Mode", ["Single Date", "Date Range"])
+# Date Filter (applied last for final display)
 min_date = filtered_df['TransactionDate'].min().date() if not filtered_df.empty and not pd.isna(filtered_df['TransactionDate'].min()) else date.today()
 max_date = filtered_df['TransactionDate'].max().date() if not filtered_df.empty and not pd.isna(filtered_df['TransactionDate'].max()) else date.today()
-
-date_selection = None
-if date_filter_mode == "Single Date":
-    date_selection = st.sidebar.date_input("Select a Date", value=min_date, min_value=min_date, max_value=max_date)
-else: # Date Range
-    date_selection = st.sidebar.date_input("Select Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
+date_range = st.sidebar.date_input(
+    "Select Date Range",
+    [min_date, max_date],
+    min_value=min_date,
+    max_value=max_date
+)
 
 # ---
-## Interactive Scorecards & Filtered Charts
+## Interactive Scorecards & Filtered Charts (Moved into date_range condition)
+col1, col2, col3 = st.columns(3)
 
-if date_selection:
-    
+if len(date_range) == 2:
+    start_date, end_date = date_range
+
     # Define the initial balances based on ClusterID
     initial_balances_by_cluster = {
         '411311': 33725650,
@@ -173,20 +174,14 @@ if date_selection:
     # Calculate the dynamic saldo_awal based on selected ClusterIDs
     saldo_awal = sum(initial_balances_by_cluster.get(cid, 0) for cid in selected_cluster_ids)
 
-    # Apply date filter based on the mode
-    if date_filter_mode == "Single Date":
-        final_filtered_df = filtered_df[filtered_df['TransactionDate'].dt.date == date_selection].copy()
-    else: # Date Range
-        if len(date_selection) == 2:
-            start_date, end_date = date_selection
-            final_filtered_df = filtered_df[(filtered_df['TransactionDate'].dt.date >= start_date) & 
-                                            (filtered_df['TransactionDate'].dt.date <= end_date)].copy()
-        else:
-            final_filtered_df = pd.DataFrame() # Handle case where only one date is selected in a range input
+    # Apply date filter on the already-filtered dataframe
+    final_filtered_df = filtered_df[(filtered_df['TransactionDate'].dt.date >= start_date) & 
+                                    (filtered_df['TransactionDate'].dt.date <= end_date)].copy()
     
     # Calculate values for scorecards
     total_debit_filtered = final_filtered_df[final_filtered_df['TransactionType'] == 'Debit']['Amount'].sum()
     total_kredit_filtered = final_filtered_df[final_filtered_df['TransactionType'] == 'Kredit']['Amount'].sum()
+    
     final_balance_value = saldo_awal + (total_kredit_filtered - total_debit_filtered)
 
     def create_card(title, value):
@@ -203,11 +198,12 @@ if date_selection:
             </div>
         """
 
-    col1, col2, col3 = st.columns(3)
     with col1:
         st.markdown(create_card("Total Kredit", total_kredit_filtered), unsafe_allow_html=True)
+
     with col2:
         st.markdown(create_card("Total Debit", total_debit_filtered), unsafe_allow_html=True)
+
     with col3:
         st.markdown(create_card("Running Balance", final_balance_value), unsafe_allow_html=True)
 
@@ -297,4 +293,4 @@ if date_selection:
         final_balance_display = final_filtered_df['RunningSaldo'].iloc[-1]
         st.markdown(f"**Final Balance: Rp {final_balance_display:,.0f}**")
 else:
-    st.info("Pilih tanggal untuk melihat data yang difilter dan scorecard.")
+    st.info("Pilih rentang tanggal untuk menampilkan data yang difilter dan scorecard.")
