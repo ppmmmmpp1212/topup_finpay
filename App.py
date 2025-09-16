@@ -76,6 +76,59 @@ df['Sender'] = df['Sender'].fillna("tanpa_sender")
 
 st.write(f"Total Baris data: {len(df)}")
 
+# Define the initial balances based on ClusterID
+initial_balances_by_cluster = {
+    '411311': 33725650,
+    '421315': 8270000,
+    '421318': 22681438,
+    '421320': 52467000,
+    '421307': 64689000,
+    '421306': 48291500,
+}
+
+# ---
+## Summary Table of All Clusters
+
+st.subheader("Ringkasan Saldo Berdasarkan Klaster (Semua Data)")
+
+# Create a summary DataFrame
+summary_df = df.groupby('ClusterID')['Amount'].sum().reset_index()
+summary_df.rename(columns={'Amount': 'Total Transaksi'}, inplace=True)
+
+# Separate Debit and Kredit
+total_kredit_by_cluster = df[df['TransactionType'] == 'Kredit'].groupby('ClusterID')['Amount'].sum()
+total_debit_by_cluster = df[df['TransactionType'] == 'Debit'].groupby('ClusterID')['Amount'].sum()
+
+# Merge into a single summary DataFrame
+summary_df = summary_df.merge(total_kredit_by_cluster, on='ClusterID', how='left').rename(columns={'Amount': 'Total Kredit'})
+summary_df = summary_df.merge(total_debit_by_cluster, on='ClusterID', how='left').rename(columns={'Amount': 'Total Debit'})
+
+# Fill NaN with 0 for clusters with no credit or debit transactions
+summary_df[['Total Kredit', 'Total Debit']] = summary_df[['Total Kredit', 'Total Debit']].fillna(0)
+
+# Add Initial Balance and Running Balance columns
+summary_df['Initial Balance'] = summary_df['ClusterID'].map(initial_balances_by_cluster).fillna(0)
+summary_df['Running Balance'] = summary_df['Initial Balance'] + summary_df['Total Kredit'] - summary_df['Total Debit']
+
+# Reorder columns for better readability
+summary_df = summary_df[['ClusterID', 'Total Kredit', 'Total Debit', 'Initial Balance', 'Running Balance']]
+
+st.dataframe(summary_df, use_container_width=True)
+
+# Download button for the summary table
+summary_excel_buffer = io.BytesIO()
+summary_df.to_excel(summary_excel_buffer, index=False, engine='xlsxwriter')
+summary_excel_buffer.seek(0)
+st.download_button(
+    label="Download Ringkasan Klaster",
+    data=summary_excel_buffer,
+    file_name='ringkasan_klaster.xlsx',
+    mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    help='Klik untuk mengunduh ringkasan saldo klaster dalam format Excel.'
+)
+
+st.markdown("<br>", unsafe_allow_html=True)
+
 # ---
 ## Raw Data Display (Hidden by Default)
 
@@ -161,16 +214,6 @@ col1, col2, col3 = st.columns(3)
 if len(date_range) == 2:
     start_date, end_date = date_range
 
-    # Define the initial balances based on ClusterID
-    initial_balances_by_cluster = {
-        '411311': 33725650,
-        '421315': 8270000,
-        '421318': 22681438,
-        '421320': 52467000,
-        '421307': 64689000,
-        '421306': 48291500,
-    }
-    
     # Calculate the dynamic saldo_awal based on selected ClusterIDs
     saldo_awal = sum(initial_balances_by_cluster.get(cid, 0) for cid in selected_cluster_ids)
 
@@ -292,5 +335,3 @@ if len(date_range) == 2:
         
         final_balance_display = final_filtered_df['RunningSaldo'].iloc[-1]
         st.markdown(f"**Final Balance: Rp {final_balance_display:,.0f}**")
-else:
-    st.info("Pilih rentang tanggal untuk menampilkan data yang difilter dan scorecard.")
