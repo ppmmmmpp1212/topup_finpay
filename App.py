@@ -144,23 +144,23 @@ selected_names = st.sidebar.multiselect(
 # Filter the dataframe based on the fourth selection
 filtered_df = filtered_df[filtered_df['Nama'].isin(selected_names)].copy()
 
-# Date Filter (applied last for final display)
+# Date Filter (now a single date)
 min_date = filtered_df['TransactionDate'].min().date() if not filtered_df.empty and not pd.isna(filtered_df['TransactionDate'].min()) else date.today()
 max_date = filtered_df['TransactionDate'].max().date() if not filtered_df.empty and not pd.isna(filtered_df['TransactionDate'].max()) else date.today()
-date_range = st.sidebar.date_input(
-    "Select Date Range",
-    [min_date, max_date],
+selected_date = st.sidebar.date_input(
+    "Select a Date",
+    value=min_date,
     min_value=min_date,
     max_value=max_date
 )
 
 # ---
-## Interactive Scorecards & Filtered Charts (Moved into date_range condition)
+## Interactive Scorecards & Filtered Charts
 col1, col2, col3 = st.columns(3)
 
-if len(date_range) == 1:
-    start_date, end_date = date_range
-
+# The rest of the content will be displayed only if a date is selected
+if selected_date:
+    
     # Define the initial balances based on ClusterID
     initial_balances_by_cluster = {
         '411311': 33725650,
@@ -175,8 +175,7 @@ if len(date_range) == 1:
     saldo_awal = sum(initial_balances_by_cluster.get(cid, 0) for cid in selected_cluster_ids)
 
     # Apply date filter on the already-filtered dataframe
-    final_filtered_df = filtered_df[(filtered_df['TransactionDate'].dt.date >= start_date) & 
-                                    (filtered_df['TransactionDate'].dt.date <= end_date)].copy()
+    final_filtered_df = filtered_df[filtered_df['TransactionDate'].dt.date == selected_date].copy()
     
     # Calculate values for scorecards
     total_debit_filtered = final_filtered_df[final_filtered_df['TransactionType'] == 'Debit']['Amount'].sum()
@@ -293,4 +292,4 @@ if len(date_range) == 1:
         final_balance_display = final_filtered_df['RunningSaldo'].iloc[-1]
         st.markdown(f"**Final Balance: Rp {final_balance_display:,.0f}**")
 else:
-    st.info("Pilih rentang tanggal untuk menampilkan data yang difilter dan scorecard.")
+    st.info("Pilih tanggal untuk melihat data yang difilter dan scorecard.")
