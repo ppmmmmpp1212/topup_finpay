@@ -19,7 +19,6 @@ client = bigquery.Client(credentials=credentials, project=credentials.project_id
 query = """
 SELECT *
 FROM `alfred-analytics-406004.analytics_alfred.finpay_topup_joined`
-LIMIT 100
 """
 
 # Menjalankan query dan mengubah hasil ke DataFrame
