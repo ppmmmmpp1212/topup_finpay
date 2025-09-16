@@ -37,7 +37,14 @@ def load_data(_client, _query):
         return pd.DataFrame()
 
 # Streamlit App UI
-st.title("Monitoring Finpay Topup Dashboard")
+st.markdown(
+        """
+        <h1 style='text-align: center;'>Monitoring Finpay Topup Dashboard
+
+        </h1>
+        """,
+        unsafe_allow_html=True
+    )
 
 if st.button("Clear Cache"):
     st.cache_data.clear()
