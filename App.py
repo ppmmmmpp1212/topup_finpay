@@ -110,6 +110,12 @@ summary_df[['Total Kredit', 'Total Debit']] = summary_df[['Total Kredit', 'Total
 summary_df['Initial Balance'] = summary_df['ClusterID'].map(initial_balances_by_cluster).fillna(0)
 summary_df['Running Balance'] = summary_df['Initial Balance'] + summary_df['Total Kredit'] - summary_df['Total Debit']
 
+# Reformat numeric columns for display with commas
+summary_df['Total Kredit'] = summary_df['Total Kredit'].apply(lambda x: f"{x:,.0f}")
+summary_df['Total Debit'] = summary_df['Total Debit'].apply(lambda x: f"{x:,.0f}")
+summary_df['Initial Balance'] = summary_df['Initial Balance'].apply(lambda x: f"{x:,.0f}")
+summary_df['Running Balance'] = summary_df['Running Balance'].apply(lambda x: f"{x:,.0f}")
+
 # Reorder columns for better readability
 summary_df = summary_df[['ClusterID', 'Total Kredit', 'Total Debit', 'Initial Balance', 'Running Balance']]
 
@@ -310,6 +316,10 @@ if len(date_range) == 2:
         
         # Calculate the cumulative sum of NetChange and add it to the initial balance
         final_filtered_df['RunningSaldo'] = saldo_awal + final_filtered_df['NetChange'].cumsum()
+
+        # Reformat numeric columns for display with commas
+        final_filtered_df['Amount'] = final_filtered_df['Amount'].apply(lambda x: f"{x:,.0f}")
+        final_filtered_df['RunningSaldo'] = final_filtered_df['RunningSaldo'].apply(lambda x: f"{x:,.0f}")
         
         st.markdown(
             """
@@ -334,4 +344,4 @@ if len(date_range) == 2:
         )
         
         final_balance_display = final_filtered_df['RunningSaldo'].iloc[-1]
-        st.markdown(f"**Final Balance: Rp {final_balance_display:,.0f}**")
+        st.markdown(f"**Final Balance: Rp {final_balance_display}**")
