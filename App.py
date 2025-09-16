@@ -74,10 +74,6 @@ df['TransactionType'] = df['TransactionType'].fillna("tanpa_tipe")
 df['ClusterID'] = df['ClusterID'].fillna("tanpa_cluster").astype(str)
 df['Sender'] = df['Sender'].fillna("tanpa_sender")
 
-# Get latest data update timestamp
-latest_date = df['TransactionDate'].max()
-st.info(f"Data Update: {latest_date.strftime('%Y-%m-%d %H:%M:%S')}")
-
 st.write(f"Total Baris data: {len(df)}")
 
 # Define the initial balances based on ClusterID
@@ -329,12 +325,19 @@ if len(date_range) == 2:
     total_running_balance = summary_df['Running Balance'].sum()
 
     # Add a summary row at the bottom of the dataframe
-    summary_row = pd.DataFrame([['Total', summary_df['Total Kredit'].sum(), summary_df['Total Debit'].sum(), summary_df['Initial Balance'].sum(), total_running_balance]], 
-                               columns=summary_df.columns)
+    # FIX: Ensure all columns are present in the new row
+    summary_row = pd.DataFrame([['Total', 
+                                 summary_df['Total Transaksi'].sum(), 
+                                 summary_df['Total Kredit'].sum(), 
+                                 summary_df['Total Debit'].sum(), 
+                                 summary_df['Initial Balance'].sum(), 
+                                 total_running_balance]], 
+                               columns=['ClusterID', 'Total Transaksi', 'Total Kredit', 'Total Debit', 'Initial Balance', 'Running Balance'])
     
     summary_df = pd.concat([summary_df, summary_row], ignore_index=True)
 
     # Reformat numeric columns for display with commas
+    summary_df['Total Transaksi'] = summary_df['Total Transaksi'].apply(lambda x: f"{x:,.0f}")
     summary_df['Total Kredit'] = summary_df['Total Kredit'].apply(lambda x: f"{x:,.0f}")
     summary_df['Total Debit'] = summary_df['Total Debit'].apply(lambda x: f"{x:,.0f}")
     summary_df['Initial Balance'] = summary_df['Initial Balance'].apply(lambda x: f"{x:,.0f}")
