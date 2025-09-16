@@ -210,8 +210,50 @@ if len(date_range) == 2:
     st.markdown("<br>", unsafe_allow_html=True) # Menambahkan baris kosong sebagai pemisah
 
     # ---
-    ## Summary Table of All Clusters
+    ## Daily Debit and Credit Amounts Chart (Moved and now filtered)
+    if not final_filtered_df['TransactionDate'].dropna().empty:
+        daily_summary = final_filtered_df.groupby([final_filtered_df['TransactionDate'].dt.date, 'TransactionType'])['Amount'].sum().unstack(fill_value=0)
+        
+        if not daily_summary.empty:
+            fig = go.Figure()
+            
+            # Add a trace for Credit amounts
+            if 'Kredit' in daily_summary.columns:
+                fig.add_trace(
+                    go.Scatter(
+                        x=daily_summary.index,
+                        y=daily_summary['Kredit'],
+                        mode='lines+markers',
+                        name='Kredit'
+                    )
+                )
 
+            # Add a trace for Debit amounts
+            if 'Debit' in daily_summary.columns:
+                fig.add_trace(
+                    go.Scatter(
+                        x=daily_summary.index,
+                        y=daily_summary['Debit'],
+                        mode='lines+markers',
+                        name='Debit'
+                    )
+                )
+            
+            fig.update_layout(
+                title="Daily Debit and Credit Amounts (Filtered)", # Updated title
+                xaxis_title="Date",
+                yaxis_title="Amount (Rp)",
+                template="plotly_dark"
+            )
+            st.plotly_chart(fig)
+        else:
+            st.warning("Tidak ada data untuk menampilkan grafik jumlah debit/kredit harian pada filter yang dipilih.")
+    
+    st.markdown("<br>", unsafe_allow_html=True) # Menambahkan baris kosong menggunakan HTML
+    st.markdown("<br>", unsafe_allow_html=True) # Menambahkan baris kosong menggunakan HTML
+
+    # ---
+    ## Summary Table of All Clusters (New location)
     st.subheader("Ringkasan Saldo Berdasarkan Klaster (Semua Data)")
 
     # Create a summary DataFrame
@@ -257,7 +299,7 @@ if len(date_range) == 2:
     )
 
     st.markdown("<br>", unsafe_allow_html=True)
-
+    
     if final_filtered_df.empty:
         st.warning("No data found for the selected filters.")
     else:
