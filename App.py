@@ -15,7 +15,7 @@ credentials = service_account.Credentials.from_service_account_info(json.loads(c
 # Inisialisasi BigQuery client
 client = bigquery.Client(credentials=credentials, project=credentials.project_id)
 
-# Query ke tabel BigQuery
+# Query ke tabel BigQuery tanpa batasan LIMIT
 query = """
 SELECT *
 FROM `alfred-analytics-406004.analytics_alfred.finpay_topup_joined`
@@ -38,7 +38,7 @@ st.subheader("Data dari BigQuery")
 st.dataframe(df)
 
 # Contoh visualisasi sederhana (misalnya, jumlah transaksi per tanggal)
-# Ganti 'TransactionDate' dengan nama kolom tanggal yang sesuai di tabel Anda
+# Menggunakan kolom 'TransactionDate' sesuai kode Anda
 if 'TransactionDate' in df.columns:
     df['TransactionDate'] = pd.to_datetime(df['TransactionDate'])
     daily_counts = df.groupby(df['TransactionDate'].dt.date).size().reset_index(name='count')
