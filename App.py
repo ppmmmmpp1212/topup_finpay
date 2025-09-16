@@ -56,8 +56,12 @@ df['TransactionDate'] = pd.to_datetime(df['TransactionDate'], errors='coerce')
 df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
 
 st.write(f"Rows loaded: {len(df)}")
-st.subheader("Raw Data from BigQuery")
-st.dataframe(df.head(100), use_container_width=True)
+
+# ---
+## Raw Data Display (Hidden by Default)
+
+with st.expander("Show Raw Data from BigQuery"):
+    st.dataframe(df.head(100), use_container_width=True)
 
 # ---
 ## Daily Transaction Count Chart
