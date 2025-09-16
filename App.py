@@ -23,24 +23,38 @@ FROM `alfred-analytics-406004.analytics_alfred.finpay_topup_joined`
 
 # Menjalankan query dan mengubah hasil ke DataFrame
 @st.cache_data
-def load_data():
-    query_job = client.query(query)
+def load_data(_client, _query):
+    query_job = _client.query(_query)
     return query_job.to_dataframe()
 
+# Tombol untuk membersihkan cache
+if st.button("Clear Cache"):
+    st.cache_data.clear()
+    st.success("Cache telah dihapus. Muat ulang data...")
+
 # Memuat data
-df = load_data()
+df = load_data(client, query)
+
+# Konversi TransactionDate ke datetime jika ada
+if 'TransactionDate' in df.columns:
+    df['TransactionDate'] = pd.to_datetime(df['TransactionDate'])
+
+# Konversi Amount ke numeric jika ada
+if 'Amount' in df.columns:
+    df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
+
+# Menampilkan jumlah baris yang dimuat
+st.write(f"Jumlah baris yang dimuat: {len(df)}")
 
 # Menampilkan judul aplikasi
 st.title("Dashboard Finpay Topup Data")
 
 # Menampilkan data dalam tabel
 st.subheader("Data dari BigQuery")
-st.dataframe(df)
+st.dataframe(df, use_container_width=True)
 
 # Contoh visualisasi sederhana (misalnya, jumlah transaksi per tanggal)
-# Menggunakan kolom 'TransactionDate' sesuai kode Anda
 if 'TransactionDate' in df.columns:
-    df['TransactionDate'] = pd.to_datetime(df['TransactionDate'])
     daily_counts = df.groupby(df['TransactionDate'].dt.date).size().reset_index(name='count')
 
     # Membuat plot dengan Plotly
@@ -74,9 +88,39 @@ if 'TransactionDate' in df.columns:
         min_value=min_date,
         max_value=max_date
     )
+
+    # Input Saldo Awal
+    saldo_awal = st.sidebar.number_input(
+        "Saldo Awal",
+        min_value=0.0,
+        value=8000000.0,
+        step=1000.0,
+        format="%.0f"
+    )
+
     if len(date_range) == 2:
         start_date, end_date = date_range
         filtered_df = df[(df['TransactionDate'].dt.date >= start_date) & 
-                        (df['TransactionDate'].dt.date <= end_date)]
-        st.subheader("Data Tabel yang Difilter")
-        st.dataframe(filtered_df)
+                         (df['TransactionDate'].dt.date <= end_date)].copy()
+        
+        if 'Amount' in filtered_df.columns:
+            # Urutkan berdasarkan TransactionDate
+            filtered_df.sort_values('TransactionDate', inplace=True)
+            
+            # Kalkulasi running saldo (mengurangi Amount secara kumulatif)
+            filtered_df['RunningSaldo'] = saldo_awal - filtered_df['Amount'].cumsum()
+            
+            st.subheader("Data Tabel yang Difilter dengan Running Saldo")
+            st.dataframe(filtered_df, use_container_width=True)
+            
+            if not filtered_df.empty:
+                sisa_saldo = filtered_df['RunningSaldo'].iloc[-1]
+            else:
+                sisa_saldo = saldo_awal
+            st.write(f"Sisa Saldo Akhir: {sisa_saldo:,.0f}")
+        else:
+            st.warning("Kolom 'Amount' tidak ditemukan. Tidak dapat melakukan kalkulasi saldo.")
+            st.subheader("Data Tabel yang Difilter")
+            st.dataframe(filtered_df, use_container_width=True)
+else:
+    st.warning("Kolom 'TransactionDate' tidak ditemukan. Silakan sesuaikan nama kolom untuk visualisasi.")
