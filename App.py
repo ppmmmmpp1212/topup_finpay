@@ -45,9 +45,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-if st.button("Clear Cache"):
-    st.cache_data.clear()
-    st.experimental_rerun()
+
 
 # Load data
 df = load_data(client, query)
