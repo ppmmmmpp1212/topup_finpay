@@ -55,6 +55,9 @@ if not all(col in df.columns for col in required_columns):
 df['TransactionDate'] = pd.to_datetime(df['TransactionDate'], errors='coerce')
 df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
 
+# NEW: Fill missing 'Nama' values with "tanpa_nama"
+df['Nama'] = df['Nama'].fillna("tanpa_nama")
+
 st.write(f"Rows loaded: {len(df)}")
 
 # ---
@@ -101,12 +104,12 @@ date_range = st.sidebar.date_input(
     max_value=max_date
 )
 
-# Name Filter (NEW)
+# Name Filter (FIXED)
 unique_names = sorted(df['Nama'].unique())
 selected_names = st.sidebar.multiselect(
     "Filter by Name",
     options=unique_names,
-    default=unique_names # Default selection is all names
+    default=unique_names
 )
 
 # Initial Balance Input
