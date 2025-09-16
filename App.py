@@ -7,6 +7,9 @@ import json
 from datetime import date
 import io
 
+# Set Streamlit page to wide mode
+st.set_page_config(layout="wide")
+
 # Fetch credentials from Streamlit secrets
 try:
     credentials_json = st.secrets["bigquery"]["credentials"]
@@ -92,15 +95,33 @@ col1, col2, col3 = st.columns(3)
 
 # Calculate total credit
 total_kredit = df[df['TransactionType'] == 'Kredit']['Amount'].sum()
-col1.metric("Total Kredit", f"Rp {total_kredit:,.0f}")
-
 # Calculate total debit
 total_debit = df[df['TransactionType'] == 'Debit']['Amount'].sum()
-col2.metric("Total Debit", f"Rp {total_debit:,.0f}")
-
-# Calculate and display running balance
+# Calculate running balance
 current_balance = total_kredit - total_debit
-col3.metric("Running Balance (Semua Data)", f"Rp {current_balance:,.0f}")
+
+def create_card(title, value):
+    return f"""
+        <div style="
+            background-color: #F0F2F6;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2);
+            text-align: center;
+        ">
+            <h4 style="margin: 0; color: #333;">{title}</h4>
+            <h2 style="margin: 10px 0 0; color: #0078A1;">Rp {value:,.0f}</h2>
+        </div>
+    """
+
+with col1:
+    st.markdown(create_card("Total Kredit", total_kredit), unsafe_allow_html=True)
+
+with col2:
+    st.markdown(create_card("Total Debit", total_debit), unsafe_allow_html=True)
+
+with col3:
+    st.markdown(create_card("Running Balance (Semua Data)", current_balance), unsafe_allow_html=True)
 
 # ---
 ## Daily Debit and Credit Amounts Chart
