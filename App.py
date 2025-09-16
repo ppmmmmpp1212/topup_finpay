@@ -103,14 +103,21 @@ if 'TransactionDate' in df.columns:
         filtered_df = df[(df['TransactionDate'].dt.date >= start_date) & 
                          (df['TransactionDate'].dt.date <= end_date)].copy()
         
-        if 'Amount' in filtered_df.columns:
+        if 'Amount' in filtered_df.columns and 'TransactionType' in filtered_df.columns:
             # Urutkan berdasarkan TransactionDate
             filtered_df.sort_values('TransactionDate', inplace=True)
             
-            # Kalkulasi running saldo (mengurangi Amount secara kumulatif)
-            filtered_df['RunningSaldo'] = saldo_awal - filtered_df['Amount'].cumsum()
+            # Buat kolom baru yang akan digunakan untuk kalkulasi
+            # Nilai Amount diatur 0 jika TransactionType bukan 'Debit'
+            filtered_df['DebitAmount'] = filtered_df.apply(
+                lambda row: row['Amount'] if row['TransactionType'] == 'Debit' else 0,
+                axis=1
+            )
             
-            st.subheader("Data Tabel yang Difilter dengan Running Saldo")
+            # Kalkulasi running saldo (mengurangi DebitAmount secara kumulatif)
+            filtered_df['RunningSaldo'] = saldo_awal - filtered_df['DebitAmount'].cumsum()
+            
+            st.subheader("Data Tabel yang Difilter dengan Running Saldo (Debit Only)")
             st.dataframe(filtered_df, use_container_width=True)
             
             if not filtered_df.empty:
@@ -118,8 +125,12 @@ if 'TransactionDate' in df.columns:
             else:
                 sisa_saldo = saldo_awal
             st.write(f"Sisa Saldo Akhir: {sisa_saldo:,.0f}")
-        else:
+        elif 'Amount' not in filtered_df.columns:
             st.warning("Kolom 'Amount' tidak ditemukan. Tidak dapat melakukan kalkulasi saldo.")
+            st.subheader("Data Tabel yang Difilter")
+            st.dataframe(filtered_df, use_container_width=True)
+        elif 'TransactionType' not in filtered_df.columns:
+            st.warning("Kolom 'TransactionType' tidak ditemukan. Tidak dapat melakukan kalkulasi saldo sesuai tipe transaksi.")
             st.subheader("Data Tabel yang Difilter")
             st.dataframe(filtered_df, use_container_width=True)
 else:
