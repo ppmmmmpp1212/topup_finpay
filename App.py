@@ -158,7 +158,7 @@ date_range = st.sidebar.date_input(
 ## Interactive Scorecards & Filtered Charts (Moved into date_range condition)
 col1, col2, col3 = st.columns(3)
 
-if len(date_range) == 1:
+if len(date_range) == 2:
     start_date, end_date = date_range
 
     # Define the initial balances based on ClusterID
@@ -175,4 +175,122 @@ if len(date_range) == 1:
     saldo_awal = sum(initial_balances_by_cluster.get(cid, 0) for cid in selected_cluster_ids)
 
     # Apply date filter on the already-filtered dataframe
-    final_filtered_df = filtered_df[(filtered_df['TransactionDate'].dt.date >= start_
+    final_filtered_df = filtered_df[(filtered_df['TransactionDate'].dt.date >= start_date) & 
+                                    (filtered_df['TransactionDate'].dt.date <= end_date)].copy()
+    
+    # Calculate values for scorecards
+    total_debit_filtered = final_filtered_df[final_filtered_df['TransactionType'] == 'Debit']['Amount'].sum()
+    total_kredit_filtered = final_filtered_df[final_filtered_df['TransactionType'] == 'Kredit']['Amount'].sum()
+    
+    final_balance_value = saldo_awal + (total_kredit_filtered - total_debit_filtered)
+
+    def create_card(title, value):
+        return f"""
+            <div style="
+                background-color: #F0F2F6;
+                padding: 15px; /* Reduced padding */
+                border-radius: 8px; /* Slightly smaller border-radius */
+                box-shadow: 0 4px 6px 0 rgba(0, 0, 0, 0.1); /* Reduced shadow */
+                text-align: center;
+            ">
+                <h5 style="margin: 0; color: #555;">{title}</h5>
+                <h3 style="margin: 5px 0 0; color: #0078A1;">Rp {value:,.0f}</h3>
+            </div>
+        """
+
+    with col1:
+        st.markdown(create_card("Total Kredit", total_kredit_filtered), unsafe_allow_html=True)
+
+    with col2:
+        st.markdown(create_card("Total Debit", total_debit_filtered), unsafe_allow_html=True)
+
+    with col3:
+        st.markdown(create_card("Running Balance", final_balance_value), unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True) # Menambahkan baris kosong sebagai pemisah
+
+    # ---
+    ## Daily Debit and Credit Amounts Chart (Now inside the filtered block)
+    if not final_filtered_df['TransactionDate'].dropna().empty:
+        daily_summary = final_filtered_df.groupby([final_filtered_df['TransactionDate'].dt.date, 'TransactionType'])['Amount'].sum().unstack(fill_value=0)
+        
+        if not daily_summary.empty:
+            fig = go.Figure()
+            
+            # Add a trace for Credit amounts
+            if 'Kredit' in daily_summary.columns:
+                fig.add_trace(
+                    go.Scatter(
+                        x=daily_summary.index,
+                        y=daily_summary['Kredit'],
+                        mode='lines+markers',
+                        name='Kredit'
+                    )
+                )
+
+            # Add a trace for Debit amounts
+            if 'Debit' in daily_summary.columns:
+                fig.add_trace(
+                    go.Scatter(
+                        x=daily_summary.index,
+                        y=daily_summary['Debit'],
+                        mode='lines+markers',
+                        name='Debit'
+                    )
+                )
+            
+            fig.update_layout(
+                title="Daily Debit and Credit Amounts (Filtered)", # Updated title
+                xaxis_title="Date",
+                yaxis_title="Amount (Rp)",
+                template="plotly_dark"
+            )
+            st.plotly_chart(fig)
+        else:
+            st.warning("Tidak ada data untuk menampilkan grafik jumlah debit/kredit harian pada filter yang dipilih.")
+    
+    st.markdown("<br>", unsafe_allow_html=True) # Menambahkan baris kosong menggunakan HTML
+    st.markdown("<br>", unsafe_allow_html=True) # Menambahkan baris kosong menggunakan HTML
+    
+    if final_filtered_df.empty:
+        st.warning("No data found for the selected filters.")
+    else:
+        # Sort by date and time to ensure chronological calculation
+        final_filtered_df.sort_values('TransactionDate', ascending=True, inplace=True)
+        
+        # Create a new column 'NetChange' for calculation
+        final_filtered_df['NetChange'] = final_filtered_df.apply(
+            lambda row: row['Amount'] if row['TransactionType'] == 'Kredit' else 
+                       -row['Amount'] if row['TransactionType'] == 'Debit' else 0,
+            axis=1
+        )
+        
+        # Calculate the cumulative sum of NetChange and add it to the initial balance
+        final_filtered_df['RunningSaldo'] = saldo_awal + final_filtered_df['NetChange'].cumsum()
+        
+        st.markdown(
+            """
+            <h2 style='text-align: center;'>Filtered Data with Running Balance
+            </h2>
+            """,
+            unsafe_allow_html=True
+        )
+        st.dataframe(final_filtered_df, use_container_width=True)
+
+        # Download button for filtered data
+        excel_buffer_filtered = io.BytesIO()
+        final_filtered_df.to_excel(excel_buffer_filtered, index=False, engine='xlsxwriter')
+        excel_buffer_filtered.seek(0)
+        
+        st.download_button(
+            label="Download Filtered Data",
+            data=excel_buffer_filtered,
+            file_name='data_finpay_filtered.xlsx',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            help='Klik untuk mengunduh data yang sudah difilter dalam format Excel.'
+        )
+        
+        final_balance_display = final_filtered_df['RunningSaldo'].iloc[-1]
+        st.markdown(f"**Final Balance: Rp {final_balance_display:,.0f}**")
+else:
+    st.info("Pilih rentang tanggal untuk menampilkan data yang difilter dan scorecard.")
