@@ -54,6 +54,11 @@ if not all(col in df.columns for col in required_columns):
     st.stop()
 
 df['TransactionDate'] = pd.to_datetime(df['TransactionDate'], errors='coerce')
+
+# FIX: Remove timezone information from the datetime column
+if pd.api.types.is_datetime64tz_any_dtype(df['TransactionDate']):
+    df['TransactionDate'] = df['TransactionDate'].dt.tz_localize(None)
+
 df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
 df['Nama'] = df['Nama'].fillna("tanpa_nama")
 df['TransactionType'] = df['TransactionType'].fillna("tanpa_tipe")
@@ -157,8 +162,8 @@ selected_names = st.sidebar.multiselect(
 filtered_df = filtered_df[filtered_df['Nama'].isin(selected_names)].copy()
 
 # Date Filter (applied last for final display)
-min_date = filtered_df['TransactionDate'].min().date() if not filtered_df.empty else date.today()
-max_date = filtered_df['TransactionDate'].max().date() if not filtered_df.empty else date.today()
+min_date = filtered_df['TransactionDate'].min().date() if not filtered_df.empty and not pd.isna(filtered_df['TransactionDate'].min()) else date.today()
+max_date = filtered_df['TransactionDate'].max().date() if not filtered_df.empty and not pd.isna(filtered_df['TransactionDate'].max()) else date.today()
 date_range = st.sidebar.date_input(
     "Select Date Range",
     [min_date, max_date],
