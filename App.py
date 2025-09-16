@@ -55,9 +55,13 @@ if not all(col in df.columns for col in required_columns):
 
 df['TransactionDate'] = pd.to_datetime(df['TransactionDate'], errors='coerce')
 
-# FIX: Remove timezone information from the datetime column
-if pd.api.types.is_datetime64tz_any_dtype(df['TransactionDate']):
+# Alternative fix to remove timezone information
+# This works on all versions of Pandas
+try:
     df['TransactionDate'] = df['TransactionDate'].dt.tz_localize(None)
+except TypeError:
+    # If the column is already timezone-unaware, this will do nothing
+    pass
 
 df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
 df['Nama'] = df['Nama'].fillna("tanpa_nama")
