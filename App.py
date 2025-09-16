@@ -101,8 +101,8 @@ date_range = st.sidebar.date_input(
     max_value=max_date
 )
 
-# Name Filter (FIXED)
-unique_names = sorted(df['Nama'].dropna().unique())
+# Name Filter (NEW)
+unique_names = sorted(df['Nama'].unique())
 selected_names = st.sidebar.multiselect(
     "Filter by Name",
     options=unique_names,
