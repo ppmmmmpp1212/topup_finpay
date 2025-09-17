@@ -324,16 +324,12 @@ if len(date_range) == 2:
         # Create a new column 'NetChange' for calculation
         final_filtered_df['NetChange'] = final_filtered_df.apply(
             lambda row: row['Amount'] if row['TransactionType'] == 'Kredit' else 
-                       -row['Amount'] if row['TransactionType'] == 'Debit' else 0,
+                         -row['Amount'] if row['TransactionType'] == 'Debit' else 0,
             axis=1
         )
         
         # Calculate the cumulative sum of NetChange and add it to the initial balance
         final_filtered_df['RunningSaldo'] = saldo_awal + final_filtered_df['NetChange'].cumsum()
-
-        # Reformat numeric columns for display with commas
-        final_filtered_df['Amount'] = final_filtered_df['Amount'].apply(lambda x: f"{x:,.0f}")
-        final_filtered_df['RunningSaldo'] = final_filtered_df['RunningSaldo'].apply(lambda x: f"{x:,.0f}")
         
         st.markdown(
             """
@@ -342,8 +338,81 @@ if len(date_range) == 2:
             """,
             unsafe_allow_html=True
         )
-        st.dataframe(final_filtered_df, use_container_width=True)
 
+        # --- Tambahan untuk fitur hapus data ---
+        st.markdown("### Pilih baris untuk dihapus")
+        # Tambahkan kolom unik sementara untuk identifikasi
+        final_filtered_df['ID_Temporer'] = final_filtered_df.index
+        
+        # Tampilkan DataFrame dengan kotak centang
+        edited_df = st.data_editor(
+            final_filtered_df,
+            hide_index=True,
+            column_order=['ID_Temporer', 'TransactionDate', 'Amount', 'TransactionType', 'Nama', 'ClusterID', 'Sender', 'RunningSaldo'],
+            column_config={
+                "ID_Temporer": st.column_config.CheckboxColumn(
+                    "Pilih",
+                    help="Pilih baris yang ingin dihapus.",
+                    default=False,
+                ),
+                "TransactionDate": "Tanggal Transaksi",
+                "Amount": "Jumlah",
+                "TransactionType": "Tipe Transaksi",
+                "Nama": "Nama",
+                "ClusterID": "ID Klaster",
+                "Sender": "Pengirim",
+                "RunningSaldo": "Saldo Berjalan"
+            }
+        )
+
+        # Temukan baris yang dipilih
+        rows_to_delete_df = edited_df[edited_df['ID_Temporer']]
+        
+        # Tombol hapus dalam form untuk mencegah eksekusi berulang
+        with st.form("delete_form"):
+            st.form_submit_button("Hapus Baris yang Dipilih")
+            delete_submitted = True # Flag untuk memastikan tombol ditekan
+
+            if delete_submitted and not rows_to_delete_df.empty:
+                st.info(f"Mencoba menghapus {len(rows_to_delete_df)} baris...")
+                
+                deletion_status = {'success': [], 'failed': []}
+                
+                for index, row in rows_to_delete_df.iterrows():
+                    try:
+                        # Construct a WHERE clause that uniquely identifies the row
+                        delete_query = f"""
+                        DELETE FROM `{table_id}`
+                        WHERE 
+                            TransactionDate = PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%S', '{row['TransactionDate'].isoformat()}') AND
+                            Amount = {row['Amount']} AND
+                            TransactionType = '{row['TransactionType']}' AND
+                            Nama = '{row['Nama']}' AND
+                            ClusterID = '{row['ClusterID']}' AND
+                            Sender = {row['Sender']}
+                        """
+                        
+                        query_job = client.query(delete_query)
+                        query_job.result()
+                        
+                        deletion_status['success'].append(f"Row {index} (Date: {row['TransactionDate']})")
+                        
+                    except Exception as e:
+                        deletion_status['failed'].append(f"Row {index} (Error: {e})")
+                
+                if deletion_status['success']:
+                    st.success(f"Berhasil menghapus {len(deletion_status['success'])} baris.")
+                if deletion_status['failed']:
+                    st.error(f"Gagal menghapus {len(deletion_status['failed'])} baris: {', '.join(deletion_status['failed'])}")
+
+                # Clear cache and rerun the app to show the updated data
+                st.cache_data.clear()
+                st.rerun()
+
+        # Reformat numeric columns for display with commas
+        final_filtered_df['Amount'] = final_filtered_df['Amount'].apply(lambda x: f"{x:,.0f}")
+        final_filtered_df['RunningSaldo'] = final_filtered_df['RunningSaldo'].apply(lambda x: f"{x:,.0f}")
+        
         # Download button for filtered data
         excel_buffer_filtered = io.BytesIO()
         final_filtered_df.to_excel(excel_buffer_filtered, index=False, engine='xlsxwriter')
@@ -359,7 +428,7 @@ if len(date_range) == 2:
         
         final_balance_display = final_filtered_df['RunningSaldo'].iloc[-1]
         st.markdown(f"**Final Balance: Rp {final_balance_display}**")
-
+        
     # ---
     ## Summary Table of All Clusters (New location)
     st.markdown("<br>", unsafe_allow_html=True)
