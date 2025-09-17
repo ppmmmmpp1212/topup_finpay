@@ -172,20 +172,16 @@ with st.sidebar.expander("Hapus Data"):
     st.subheader("Hapus Baris Data")
     st.warning("Perhatian: Penghapusan data bersifat permanen.")
     
-    editable_df = df.copy()
+    # Display a data editor for deletion
+    st.data_editor(df, num_rows="dynamic", key="data_to_delete_editor")
     
-    # Use a specific key for the data editor to correctly retrieve state
-    st.session_state["edited_df_for_delete"] = st.data_editor(editable_df, num_rows="dynamic", key="data_to_delete_editor")
-    
+    # The button to confirm deletion
     if st.button("Konfirmasi Hapus Data"):
-        # Get the DataFrame from session state after user interaction
-        edited_df = st.session_state["edited_df_for_delete"]
-        
-        # Find the indices of rows that were deleted (where all values became NaN)
-        deleted_rows_indices = edited_df.index[edited_df.isnull().all(axis=1)].tolist()
+        # Correctly get the indices of deleted rows from the session state
+        deleted_rows_indices = st.session_state["data_to_delete_editor"]["deleted_rows"]
 
         if deleted_rows_indices:
-            # Get the original data for the deleted rows using the correct indices
+            # Use the original DataFrame `df` with the indices from the editor
             rows_to_delete = df.iloc[deleted_rows_indices]
 
             # Create a list of unique values to form a WHERE clause
@@ -385,109 +381,4 @@ if len(date_range) == 2:
         final_filtered_df['RunningSaldo'] = saldo_awal + final_filtered_df['NetChange'].cumsum()
 
         # Reformat numeric columns for display with commas
-        final_filtered_df['Amount'] = final_filtered_df['Amount'].apply(lambda x: f"{x:,.0f}")
-        final_filtered_df['RunningSaldo'] = final_filtered_df['RunningSaldo'].apply(lambda x: f"{x:,.0f}")
-        
-        st.markdown(
-            """
-            <h2 style='text-align: center;'>Filtered Data with Running Balance
-            </h2>
-            """,
-            unsafe_allow_html=True
-        )
-        st.dataframe(final_filtered_df, use_container_width=True)
-
-        # Download button for filtered data
-        excel_buffer_filtered = io.BytesIO()
-        final_filtered_df.to_excel(excel_buffer_filtered, index=False, engine='xlsxwriter')
-        excel_buffer_filtered.seek(0)
-        
-        st.download_button(
-            label="Download Filtered Data",
-            data=excel_buffer_filtered,
-            file_name='data_finpay_filtered.xlsx',
-            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            help='Klik untuk mengunduh data yang sudah difilter dalam format Excel.'
-        )
-        
-        final_balance_display = final_filtered_df['RunningSaldo'].iloc[-1]
-        st.markdown(f"**Final Balance: Rp {final_balance_display}**")
-
-    # ---
-    ## Summary Table of All Clusters (New location)
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown(
-        """
-        <h2 style='text-align: center;'>Ringkasan Saldo Berdasarkan Cluster
-        </h2>
-        """,
-        unsafe_allow_html=True
-    )
-
-    # Create a summary DataFrame
-    summary_df = df.groupby('ClusterID')['Amount'].sum().reset_index()
-    summary_df.rename(columns={'Amount': 'Total Transaksi'}, inplace=True)
-
-    # Separate Debit and Kredit
-    total_kredit_by_cluster = df[df['TransactionType'] == 'Kredit'].groupby('ClusterID')['Amount'].sum()
-    total_debit_by_cluster = df[df['TransactionType'] == 'Debit'].groupby('ClusterID')['Amount'].sum()
-    
-    # Calculate latest transaction date per cluster
-    latest_date_by_cluster = df.groupby('ClusterID')['TransactionDate'].max()
-
-    # Merge into a single summary DataFrame
-    summary_df = summary_df.merge(total_kredit_by_cluster, on='ClusterID', how='left').rename(columns={'Amount': 'Total Kredit'})
-    summary_df = summary_df.merge(total_debit_by_cluster, on='ClusterID', how='left').rename(columns={'Amount': 'Total Debit'})
-    summary_df = summary_df.merge(latest_date_by_cluster, on='ClusterID', how='left').rename(columns={'TransactionDate': 'Data Update'})
-
-    # Fill NaN with 0 for clusters with no credit or debit transactions
-    summary_df[['Total Kredit', 'Total Debit']] = summary_df[['Total Kredit', 'Total Debit']].fillna(0)
-
-    # Add Initial Balance and Running Balance columns
-    summary_df['Initial Balance'] = summary_df['ClusterID'].map(initial_balances_by_cluster).fillna(0)
-    summary_df['Running Balance'] = summary_df['Initial Balance'] + summary_df['Total Kredit'] - summary_df['Total Debit']
-    
-    # Calculate the grand total of the running balances
-    total_running_balance = summary_df['Running Balance'].sum()
-
-    # Add a summary row at the bottom of the dataframe
-    summary_row = pd.DataFrame([['Total', 
-                                 '---', # Data Update for total row
-                                 summary_df['Total Transaksi'].sum(), 
-                                 summary_df['Total Kredit'].sum(), 
-                                 summary_df['Total Debit'].sum(), 
-                                 summary_df['Initial Balance'].sum(), 
-                                 total_running_balance]], 
-                               columns=['ClusterID', 'Data Update', 'Total Transaksi', 'Total Kredit', 'Total Debit', 'Initial Balance', 'Running Balance'])
-    
-    summary_df = pd.concat([summary_df, summary_row], ignore_index=True)
-
-    # Reformat numeric and datetime columns for display
-    summary_df['Data Update'] = summary_df['Data Update'].apply(lambda x: x.strftime('%Y-%m-%d %H:%M:%S') if pd.notnull(x) and x != '---' else '---')
-    summary_df['Total Transaksi'] = summary_df['Total Transaksi'].apply(lambda x: f"{x:,.0f}")
-    summary_df['Total Kredit'] = summary_df['Total Kredit'].apply(lambda x: f"{x:,.0f}")
-    summary_df['Total Debit'] = summary_df['Total Debit'].apply(lambda x: f"{x:,.0f}")
-    summary_df['Initial Balance'] = summary_df['Initial Balance'].apply(lambda x: f"{x:,.0f}")
-    summary_df['Running Balance'] = summary_df['Running Balance'].apply(lambda x: f"{x:,.0f}")
-
-    # Reorder columns for better readability
-    summary_df = summary_df[['ClusterID', 'Data Update', 'Total Kredit', 'Total Debit', 'Initial Balance', 'Running Balance']]
-
-    st.dataframe(summary_df, use_container_width=True)
-
-    # Download button for the summary table
-    summary_excel_buffer = io.BytesIO()
-    summary_df.to_excel(summary_excel_buffer, index=False, engine='xlsxwriter')
-    summary_excel_buffer.seek(0)
-    st.download_button(
-        label="Download Ringkasan Klaster",
-        data=summary_excel_buffer,
-        file_name='ringkasan_klaster.xlsx',
-        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        help='Klik untuk mengunduh ringkasan saldo klaster dalam format Excel.'
-    )
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-else:
-    st.info("Pilih rentang tanggal untuk menampilkan data yang difilter dan scorecard.")
+        final_
