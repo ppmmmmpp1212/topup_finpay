@@ -177,8 +177,7 @@ with st.sidebar.expander("Hapus Data Manual"):
         
         # Input fields for the row to be deleted
         del_date = st.date_input("Transaction Date (Hapus)", value=date.today())
-        # FIX: Added step=1 to include seconds input
-        del_time = st.time_input("Transaction Time (Hapus)", value=datetime.now().time(), step=1)
+        del_time = st.time_input("Transaction Time (Hapus)", value=datetime.now().time())
         del_amount = st.number_input("Amount (Hapus)", min_value=0, step=1000, format="%d")
         del_sender = st.number_input("Sender (Hapus)", min_value=0, step=1, format="%d")
         
