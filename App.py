@@ -216,6 +216,8 @@ date_range = st.sidebar.date_input(
     max_value=max_date
 )
 
+# ---
+## Fitur Hapus Data di Sidebar
 with st.sidebar.expander("Hapus Data"):
     st.warning("PERINGATAN: Tindakan ini akan menghapus data secara PERMANEN dari BigQuery.")
     
@@ -243,6 +245,7 @@ with st.sidebar.expander("Hapus Data"):
             for index, row in rows_to_delete_df.iterrows():
                 try:
                     # Construct a WHERE clause that uniquely identifies the row
+                    # PASTIKAN NILAI NUMERIK TIDAK DIAPIT TANDA KUTIP
                     delete_query = f"""
                     DELETE FROM `{table_id}`
                     WHERE 
@@ -269,6 +272,7 @@ with st.sidebar.expander("Hapus Data"):
 
             st.cache_data.clear()
             st.rerun()
+
 # ---
 ## Interactive Scorecards & Filtered Charts (Moved into date_range condition)
 col1, col2, col3 = st.columns(3)
