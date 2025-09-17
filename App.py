@@ -75,7 +75,7 @@ df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
 df['Nama'] = df['Nama'].fillna("tanpa_nama")
 df['TransactionType'] = df['TransactionType'].fillna("tanpa_tipe")
 df['ClusterID'] = df['ClusterID'].fillna("tanpa_cluster").astype(str)
-df['Sender'] = df['Sender'].fillna("tanpa_sender")
+df['Sender'] = pd.to_numeric(df['Sender'], errors='coerce').fillna(0).astype(int)  # Ensure Sender is integer
 
 # Get latest data update timestamp
 latest_date = df['TransactionDate'].max()
@@ -95,7 +95,6 @@ initial_balances_by_cluster = {
 
 # ---
 ## Raw Data Display (Hidden by Default)
-
 with st.expander("Lihat Raw Data"):
     st.dataframe(df, use_container_width=True)
 
@@ -116,7 +115,7 @@ with st.expander("Lihat Raw Data"):
 ## Sidebar
 st.sidebar.header("Data Filters & Settings")
 
-# NEW: Form Input Data
+# Form Input Data
 with st.sidebar.expander("Tambah Data Baru"):
     with st.form("new_data_form"):
         st.subheader("Form Input Transaksi")
@@ -132,7 +131,6 @@ with st.sidebar.expander("Tambah Data Baru"):
         unique_cluster_ids_form = sorted(df['ClusterID'].unique())
         cluster_id = st.selectbox("Cluster ID", options=unique_cluster_ids_form)
         
-        # FIX: Changed to number input to match BigQuery schema
         sender = st.number_input("Sender", min_value=0, step=1, format="%d")
         
         submitted = st.form_submit_button("Submit")
@@ -143,17 +141,16 @@ with st.sidebar.expander("Tambah Data Baru"):
             
             # Create a dictionary to represent the new row
             new_row = {
-                'TransactionDate': full_transaction_date.isoformat(), # Format as ISO string
+                'TransactionDate': full_transaction_date.isoformat(),
                 'Amount': float(amount),
                 'TransactionType': transaction_type,
                 'Nama': nama,
                 'ClusterID': cluster_id,
-                'Sender': int(sender) # Ensure sender is an integer
+                'Sender': int(sender)
             }
             
             # Insert the new row into the BigQuery table
             try:
-                # BigQuery requires the data as a list of dictionaries
                 errors = client.insert_rows_json(table_id, [new_row])
                 
                 if errors:
@@ -244,8 +241,11 @@ with st.sidebar.expander("Hapus Data"):
             
             for index, row in rows_to_delete_df.iterrows():
                 try:
+                    # Validate Sender value
+                    if pd.isna(row['Sender']):
+                        raise ValueError("Sender value is missing or invalid")
+                    
                     # Construct a WHERE clause that uniquely identifies the row
-                    # PASTIKAN NILAI NUMERIK TIDAK DIAPIT TANDA KUTIP
                     delete_query = f"""
                     DELETE FROM `{table_id}`
                     WHERE 
@@ -254,8 +254,11 @@ with st.sidebar.expander("Hapus Data"):
                         TransactionType = '{row['TransactionType']}' AND
                         Nama = '{row['Nama'].replace("'", "''")}' AND
                         ClusterID = '{row['ClusterID']}' AND
-                        Sender = {row['Sender']}
+                        Sender = {int(row['Sender'])}
                     """
+                    
+                    # Debug: Show the query for verification
+                    # st.write(f"Executing query: {delete_query}")
                     
                     query_job = client.query(delete_query)
                     query_job.result()
@@ -263,7 +266,7 @@ with st.sidebar.expander("Hapus Data"):
                     deletion_status['success'].append(f"Row {index}")
                     
                 except Exception as e:
-                    deletion_status['failed'].append(f"Row {index} (Error: {e})")
+                    deletion_status['failed'].append(f"Row {index} (Error: {e}, Sender: {row['Sender']})")
             
             if deletion_status['success']:
                 st.success(f"Berhasil menghapus {len(deletion_status['success'])} baris.")
@@ -274,7 +277,7 @@ with st.sidebar.expander("Hapus Data"):
             st.rerun()
 
 # ---
-## Interactive Scorecards & Filtered Charts (Moved into date_range condition)
+## Interactive Scorecards & Filtered Charts
 col1, col2, col3 = st.columns(3)
 
 if len(date_range) == 2:
@@ -297,9 +300,9 @@ if len(date_range) == 2:
         return f"""
             <div style="
                 background-color: #F0F2F6;
-                padding: 15px; /* Reduced padding */
-                border-radius: 8px; /* Slightly smaller border-radius */
-                box-shadow: 0 4px 6px 0 rgba(0, 0, 0, 0.1); /* Reduced shadow */
+                padding: 15px;
+                border-radius: 8px;
+                box-shadow: 0 4px 6px 0 rgba(0, 0, 0, 0.1);
                 text-align: center;
             ">
                 <h5 style="margin: 0; color: #555;">{title}</h5>
@@ -316,17 +319,16 @@ if len(date_range) == 2:
     with col3:
         st.markdown(create_card("Running Balance", final_balance_value), unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True) # Menambahkan baris kosong sebagai pemisah
+    st.markdown("<br>", unsafe_allow_html=True)
 
     # ---
-    ## Daily Debit and Credit Amounts Chart (Moved and now filtered)
+    ## Daily Debit and Credit Amounts Chart
     if not final_filtered_df['TransactionDate'].dropna().empty:
         daily_summary = final_filtered_df.groupby([final_filtered_df['TransactionDate'].dt.date, 'TransactionType'])['Amount'].sum().unstack(fill_value=0)
         
         if not daily_summary.empty:
             fig = go.Figure()
             
-            # Add a trace for Credit amounts
             if 'Kredit' in daily_summary.columns:
                 fig.add_trace(
                     go.Scatter(
@@ -337,7 +339,6 @@ if len(date_range) == 2:
                     )
                 )
 
-            # Add a trace for Debit amounts
             if 'Debit' in daily_summary.columns:
                 fig.add_trace(
                     go.Scatter(
@@ -349,7 +350,7 @@ if len(date_range) == 2:
                 )
             
             fig.update_layout(
-                title="Daily Debit and Credit Amounts (Filtered)", # Updated title
+                title="Daily Debit and Credit Amounts (Filtered)",
                 xaxis_title="Date",
                 yaxis_title="Amount (Rp)",
                 template="plotly_dark"
@@ -358,8 +359,8 @@ if len(date_range) == 2:
         else:
             st.warning("Tidak ada data untuk menampilkan grafik jumlah debit/kredit harian pada filter yang dipilih.")
     
-    st.markdown("<br>", unsafe_allow_html=True) # Menambahkan baris kosong menggunakan HTML
-    st.markdown("<br>", unsafe_allow_html=True) # Menambahkan baris kosong menggunakan HTML
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
     
     if final_filtered_df.empty:
         st.warning("No data found for the selected filters.")
@@ -408,7 +409,7 @@ if len(date_range) == 2:
         st.markdown(f"**Final Balance: Rp {final_balance_display}**")
         
     # ---
-    ## Summary Table of All Clusters (New location)
+    ## Summary Table of All Clusters
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown(
         """
@@ -446,7 +447,7 @@ if len(date_range) == 2:
 
     # Add a summary row at the bottom of the dataframe
     summary_row = pd.DataFrame([['Total', 
-                                 '---', # Data Update for total row
+                                 '---',
                                  summary_df['Total Transaksi'].sum(), 
                                  summary_df['Total Kredit'].sum(), 
                                  summary_df['Total Debit'].sum(), 
