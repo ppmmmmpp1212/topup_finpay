@@ -83,7 +83,7 @@ st.write(f"Total Baris data: {len(df)}")
 # Define the initial balances based on ClusterID
 initial_balances_by_cluster = {
     '411311': 33725650,
-    '421315': 8270000,
+    '421315': 50622293,
     '421318': 22681438,
     '421320': 52467000,
     '421307': 64689000,
