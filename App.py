@@ -172,54 +172,53 @@ with st.sidebar.expander("Hapus Data"):
     st.subheader("Hapus Baris Data")
     st.warning("Perhatian: Penghapusan data bersifat permanen.")
     
-    if st.button("Tampilkan Data untuk Dihapus"):
-        # Display data in st.data_editor to allow selection and deletion
-        editable_df = df.copy()
+    editable_df = df.copy()
+    
+    # Use a specific key for the data editor to correctly retrieve state
+    st.session_state["edited_df_for_delete"] = st.data_editor(editable_df, num_rows="dynamic", key="data_to_delete_editor")
+    
+    if st.button("Konfirmasi Hapus Data"):
+        # Get the DataFrame from session state after user interaction
+        edited_df = st.session_state["edited_df_for_delete"]
         
-        # Ensure datetime is in a format BigQuery can interpret
-        editable_df['TransactionDate'] = editable_df['TransactionDate'].dt.strftime('%Y-%m-%d %H:%M:%S')
-        
-        # Use key to prevent multiple editors from interfering
-        edited_df = st.data_editor(editable_df, num_rows="dynamic", key="data_to_delete_editor")
-        
-        if st.button("Konfirmasi Hapus Data"):
-            # Get the indices of rows that were deleted
-            deleted_rows_indices = edited_df.index[edited_df.isnull().all(axis=1)].tolist()
+        # Find the indices of rows that were deleted (where all values became NaN)
+        deleted_rows_indices = edited_df.index[edited_df.isnull().all(axis=1)].tolist()
 
-            if deleted_rows_indices:
-                rows_to_delete = df.iloc[deleted_rows_indices]
+        if deleted_rows_indices:
+            # Get the original data for the deleted rows using the correct indices
+            rows_to_delete = df.iloc[deleted_rows_indices]
 
-                # Create a list of unique values to form a WHERE clause
-                delete_conditions = []
-                for _, row in rows_to_delete.iterrows():
-                    # FIX: Use correct syntax for BigQuery DATETIME literal
-                    # To be safe, we use a composite key to identify the row to delete
-                    condition = (
-                        f"TransactionDate = DATETIME('{row['TransactionDate'].strftime('%Y-%m-%d %H:%M:%S')}') AND "
-                        f"Amount = {row['Amount']} AND "
-                        f"Sender = {row['Sender']} AND "
-                        f"ClusterID = '{row['ClusterID']}'"
-                    )
-                    delete_conditions.append(condition)
+            # Create a list of unique values to form a WHERE clause
+            delete_conditions = []
+            for _, row in rows_to_delete.iterrows():
+                # FIX: Use a more robust WHERE clause with explicit BigQuery syntax
+                # This ensures the datetime, amount, and sender are correctly matched.
+                condition = (
+                    f"TransactionDate = DATETIME('{row['TransactionDate'].strftime('%Y-%m-%d %H:%M:%S')}') AND "
+                    f"Amount = {row['Amount']} AND "
+                    f"Sender = {row['Sender']} AND "
+                    f"ClusterID = '{row['ClusterID']}'"
+                )
+                delete_conditions.append(condition)
+            
+            # Combine all conditions into a single WHERE clause
+            where_clause = " OR ".join([f"({c})" for c in delete_conditions])
+            
+            # BigQuery DELETE statement
+            delete_query = f"DELETE FROM `{table_id}` WHERE {where_clause}"
+
+            try:
+                # Execute the delete query
+                query_job = client.query(delete_query)
+                query_job.result() # Wait for the job to complete
                 
-                # Combine all conditions into a single WHERE clause
-                where_clause = " OR ".join([f"({c})" for c in delete_conditions])
-                
-                # BigQuery DELETE statement
-                delete_query = f"DELETE FROM `{table_id}` WHERE {where_clause}"
-
-                try:
-                    # Execute the delete query
-                    query_job = client.query(delete_query)
-                    query_job.result() # Wait for the job to complete
-                    
-                    st.success(f"{len(deleted_rows_indices)} baris berhasil dihapus dari BigQuery.")
-                    st.cache_data.clear()
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Terjadi kesalahan saat menghapus data: {e}")
-            else:
-                st.warning("Tidak ada baris yang dipilih untuk dihapus.")
+                st.success(f"{len(deleted_rows_indices)} baris berhasil dihapus dari BigQuery.")
+                st.cache_data.clear()
+                st.rerun()
+            except Exception as e:
+                st.error(f"Terjadi kesalahan saat menghapus data: {e}")
+        else:
+            st.warning("Tidak ada baris yang dipilih untuk dihapus.")
 
 
 # ---
