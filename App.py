@@ -75,7 +75,7 @@ df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
 df['Nama'] = df['Nama'].fillna("tanpa_nama")
 df['TransactionType'] = df['TransactionType'].fillna("tanpa_tipe")
 df['ClusterID'] = df['ClusterID'].fillna("tanpa_cluster").astype(str)
-df['Sender'] = pd.to_numeric(df['Sender'], errors='coerce').fillna(0).astype(int)  # Ensure Sender is integer
+df['Sender'] = df['Sender'].fillna("tanpa_sender")
 
 # Get latest data update timestamp
 latest_date = df['TransactionDate'].max()
@@ -95,6 +95,7 @@ initial_balances_by_cluster = {
 
 # ---
 ## Raw Data Display (Hidden by Default)
+
 with st.expander("Lihat Raw Data"):
     st.dataframe(df, use_container_width=True)
 
@@ -115,7 +116,7 @@ with st.expander("Lihat Raw Data"):
 ## Sidebar
 st.sidebar.header("Data Filters & Settings")
 
-# Form Input Data
+# NEW: Form Input Data
 with st.sidebar.expander("Tambah Data Baru"):
     with st.form("new_data_form"):
         st.subheader("Form Input Transaksi")
@@ -131,6 +132,7 @@ with st.sidebar.expander("Tambah Data Baru"):
         unique_cluster_ids_form = sorted(df['ClusterID'].unique())
         cluster_id = st.selectbox("Cluster ID", options=unique_cluster_ids_form)
         
+        # FIX: Changed to number input to match BigQuery schema
         sender = st.number_input("Sender", min_value=0, step=1, format="%d")
         
         submitted = st.form_submit_button("Submit")
@@ -141,16 +143,17 @@ with st.sidebar.expander("Tambah Data Baru"):
             
             # Create a dictionary to represent the new row
             new_row = {
-                'TransactionDate': full_transaction_date.isoformat(),
+                'TransactionDate': full_transaction_date.isoformat(), # Format as ISO string
                 'Amount': float(amount),
                 'TransactionType': transaction_type,
                 'Nama': nama,
                 'ClusterID': cluster_id,
-                'Sender': int(sender)
+                'Sender': int(sender) # Ensure sender is an integer
             }
             
             # Insert the new row into the BigQuery table
             try:
+                # BigQuery requires the data as a list of dictionaries
                 errors = client.insert_rows_json(table_id, [new_row])
                 
                 if errors:
@@ -162,9 +165,10 @@ with st.sidebar.expander("Tambah Data Baru"):
                     st.rerun()
             except Exception as e:
                 st.error(f"Terjadi kesalahan saat memasukkan data ke BigQuery: {e}")
-
+            
 # ---
 # Cascading filters
+# Create a filtered dataframe to be used by all subsequent filters
 filtered_df = df.copy()
 
 # 1. TransactionType Filter
@@ -174,6 +178,8 @@ selected_transaction_types = st.sidebar.multiselect(
     options=unique_transaction_types,
     default=unique_transaction_types
 )
+
+# Filter the dataframe based on the first selection
 filtered_df = filtered_df[filtered_df['TransactionType'].isin(selected_transaction_types)]
 
 # 2. ClusterID Filter (cascading)
@@ -183,6 +189,8 @@ selected_cluster_ids = st.sidebar.multiselect(
     options=unique_cluster_ids,
     default=unique_cluster_ids
 )
+
+# Filter the dataframe based on the second selection
 filtered_df = filtered_df[filtered_df['ClusterID'].isin(selected_cluster_ids)]
 
 # 3. Sender Filter (cascading)
@@ -192,6 +200,8 @@ selected_senders = st.sidebar.multiselect(
     options=unique_senders,
     default=unique_senders
 )
+
+# Filter the dataframe based on the third selection
 filtered_df = filtered_df[filtered_df['Sender'].isin(selected_senders)]
 
 # 4. Name Filter (cascading)
@@ -201,6 +211,8 @@ selected_names = st.sidebar.multiselect(
     options=unique_names,
     default=unique_names
 )
+
+# Filter the dataframe based on the fourth selection
 filtered_df = filtered_df[filtered_df['Nama'].isin(selected_names)].copy()
 
 # Date Filter (applied last for final display)
@@ -214,70 +226,7 @@ date_range = st.sidebar.date_input(
 )
 
 # ---
-## Fitur Hapus Data di Sidebar
-with st.sidebar.expander("Hapus Data"):
-    st.warning("PERINGATAN: Tindakan ini akan menghapus data secara PERMANEN dari BigQuery.")
-    
-    # Tambahkan indeks unik sementara untuk identifikasi baris
-    df_for_delete = df.copy()
-    df_for_delete['row_index'] = df_for_delete.index
-    
-    # Gunakan multiselect untuk memilih baris yang akan dihapus
-    rows_to_delete_index = st.multiselect(
-        "Pilih baris yang akan dihapus (berdasarkan indeks):",
-        options=df_for_delete.index.tolist(),
-        format_func=lambda idx: f"Index {idx}: {df_for_delete.loc[idx, 'TransactionDate'].strftime('%Y-%m-%d %H:%M:%S')} - Rp {df_for_delete.loc[idx, 'Amount']} ({df_for_delete.loc[idx, 'TransactionType']})"
-    )
-    
-    # Tombol hapus berada dalam form untuk mencegah re-eksekusi tidak terduga
-    with st.form("delete_form"):
-        delete_button = st.form_submit_button("Hapus Data yang Dipilih")
-        
-        if delete_button and rows_to_delete_index:
-            st.info(f"Mencoba menghapus {len(rows_to_delete_index)} baris...")
-            
-            rows_to_delete_df = df.loc[rows_to_delete_index]
-            deletion_status = {'success': [], 'failed': []}
-            
-            for index, row in rows_to_delete_df.iterrows():
-                try:
-                    # Validate Sender value
-                    if pd.isna(row['Sender']):
-                        raise ValueError("Sender value is missing or invalid")
-                    
-                    # Construct a WHERE clause that uniquely identifies the row
-                    delete_query = f"""
-                    DELETE FROM `{table_id}`
-                    WHERE 
-                        TransactionDate = PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%S', '{row['TransactionDate'].isoformat()}') AND
-                        Amount = {row['Amount']} AND
-                        TransactionType = '{row['TransactionType']}' AND
-                        Nama = '{row['Nama'].replace("'", "''")}' AND
-                        ClusterID = '{row['ClusterID']}' AND
-                        Sender = {int(row['Sender'])}
-                    """
-                    
-                    # Debug: Show the query for verification
-                    # st.write(f"Executing query: {delete_query}")
-                    
-                    query_job = client.query(delete_query)
-                    query_job.result()
-                    
-                    deletion_status['success'].append(f"Row {index}")
-                    
-                except Exception as e:
-                    deletion_status['failed'].append(f"Row {index} (Error: {e}, Sender: {row['Sender']})")
-            
-            if deletion_status['success']:
-                st.success(f"Berhasil menghapus {len(deletion_status['success'])} baris.")
-            if deletion_status['failed']:
-                st.error(f"Gagal menghapus {len(deletion_status['failed'])} baris: {', '.join(deletion_status['failed'])}")
-
-            st.cache_data.clear()
-            st.rerun()
-
-# ---
-## Interactive Scorecards & Filtered Charts
+## Interactive Scorecards & Filtered Charts (Moved into date_range condition)
 col1, col2, col3 = st.columns(3)
 
 if len(date_range) == 2:
@@ -300,9 +249,9 @@ if len(date_range) == 2:
         return f"""
             <div style="
                 background-color: #F0F2F6;
-                padding: 15px;
-                border-radius: 8px;
-                box-shadow: 0 4px 6px 0 rgba(0, 0, 0, 0.1);
+                padding: 15px; /* Reduced padding */
+                border-radius: 8px; /* Slightly smaller border-radius */
+                box-shadow: 0 4px 6px 0 rgba(0, 0, 0, 0.1); /* Reduced shadow */
                 text-align: center;
             ">
                 <h5 style="margin: 0; color: #555;">{title}</h5>
@@ -319,16 +268,17 @@ if len(date_range) == 2:
     with col3:
         st.markdown(create_card("Running Balance", final_balance_value), unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True) # Menambahkan baris kosong sebagai pemisah
 
     # ---
-    ## Daily Debit and Credit Amounts Chart
+    ## Daily Debit and Credit Amounts Chart (Moved and now filtered)
     if not final_filtered_df['TransactionDate'].dropna().empty:
         daily_summary = final_filtered_df.groupby([final_filtered_df['TransactionDate'].dt.date, 'TransactionType'])['Amount'].sum().unstack(fill_value=0)
         
         if not daily_summary.empty:
             fig = go.Figure()
             
+            # Add a trace for Credit amounts
             if 'Kredit' in daily_summary.columns:
                 fig.add_trace(
                     go.Scatter(
@@ -339,6 +289,7 @@ if len(date_range) == 2:
                     )
                 )
 
+            # Add a trace for Debit amounts
             if 'Debit' in daily_summary.columns:
                 fig.add_trace(
                     go.Scatter(
@@ -350,7 +301,7 @@ if len(date_range) == 2:
                 )
             
             fig.update_layout(
-                title="Daily Debit and Credit Amounts (Filtered)",
+                title="Daily Debit and Credit Amounts (Filtered)", # Updated title
                 xaxis_title="Date",
                 yaxis_title="Amount (Rp)",
                 template="plotly_dark"
@@ -359,8 +310,8 @@ if len(date_range) == 2:
         else:
             st.warning("Tidak ada data untuk menampilkan grafik jumlah debit/kredit harian pada filter yang dipilih.")
     
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True) # Menambahkan baris kosong menggunakan HTML
+    st.markdown("<br>", unsafe_allow_html=True) # Menambahkan baris kosong menggunakan HTML
     
     if final_filtered_df.empty:
         st.warning("No data found for the selected filters.")
@@ -371,12 +322,16 @@ if len(date_range) == 2:
         # Create a new column 'NetChange' for calculation
         final_filtered_df['NetChange'] = final_filtered_df.apply(
             lambda row: row['Amount'] if row['TransactionType'] == 'Kredit' else 
-                         -row['Amount'] if row['TransactionType'] == 'Debit' else 0,
+                       -row['Amount'] if row['TransactionType'] == 'Debit' else 0,
             axis=1
         )
         
         # Calculate the cumulative sum of NetChange and add it to the initial balance
         final_filtered_df['RunningSaldo'] = saldo_awal + final_filtered_df['NetChange'].cumsum()
+
+        # Reformat numeric columns for display with commas
+        final_filtered_df['Amount'] = final_filtered_df['Amount'].apply(lambda x: f"{x:,.0f}")
+        final_filtered_df['RunningSaldo'] = final_filtered_df['RunningSaldo'].apply(lambda x: f"{x:,.0f}")
         
         st.markdown(
             """
@@ -385,11 +340,6 @@ if len(date_range) == 2:
             """,
             unsafe_allow_html=True
         )
-
-        # Reformat numeric columns for display with commas
-        final_filtered_df['Amount'] = final_filtered_df['Amount'].apply(lambda x: f"{x:,.0f}")
-        final_filtered_df['RunningSaldo'] = final_filtered_df['RunningSaldo'].apply(lambda x: f"{x:,.0f}")
-        
         st.dataframe(final_filtered_df, use_container_width=True)
 
         # Download button for filtered data
@@ -407,9 +357,9 @@ if len(date_range) == 2:
         
         final_balance_display = final_filtered_df['RunningSaldo'].iloc[-1]
         st.markdown(f"**Final Balance: Rp {final_balance_display}**")
-        
+
     # ---
-    ## Summary Table of All Clusters
+    ## Summary Table of All Clusters (New location)
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown(
         """
@@ -447,7 +397,7 @@ if len(date_range) == 2:
 
     # Add a summary row at the bottom of the dataframe
     summary_row = pd.DataFrame([['Total', 
-                                 '---',
+                                 '---', # Data Update for total row
                                  summary_df['Total Transaksi'].sum(), 
                                  summary_df['Total Kredit'].sum(), 
                                  summary_df['Total Debit'].sum(), 
