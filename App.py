@@ -167,40 +167,39 @@ with st.sidebar.expander("Tambah Data Baru"):
                 st.error(f"Terjadi kesalahan saat memasukkan data ke BigQuery: {e}")
 
 # ---
-# NEW: Hapus Data
-with st.sidebar.expander("Hapus Data"):
-    st.subheader("Hapus Baris Data")
-    st.warning("Perhatian: Penghapusan data bersifat permanen.")
+# NEW: Hapus Data secara manual
+with st.sidebar.expander("Hapus Data Manual"):
+    st.subheader("Hapus Baris Data (Manual)")
+    st.warning("Perhatian: Penghapusan data bersifat permanen dan tidak dapat dibatalkan.")
     
-    # Display a data editor for deletion
-    st.data_editor(df, num_rows="dynamic", key="data_to_delete_editor")
-    
-    # The button to confirm deletion
-    if st.button("Konfirmasi Hapus Data"):
-        # Correctly get the indices of deleted rows from the session state
-        deleted_rows_indices = st.session_state["data_to_delete_editor"]["deleted_rows"]
+    with st.form("manual_delete_form"):
+        st.info("Masukkan detail baris yang ingin dihapus.")
+        
+        # Input fields for the row to be deleted
+        del_date = st.date_input("Transaction Date (Hapus)", value=date.today())
+        del_time = st.time_input("Transaction Time (Hapus)", value=datetime.now().time())
+        del_amount = st.number_input("Amount (Hapus)", min_value=0, step=1000, format="%d")
+        del_sender = st.number_input("Sender (Hapus)", min_value=0, step=1, format="%d")
+        
+        # Using a selectbox for ClusterID to prevent typos
+        unique_clusters_del = sorted(df['ClusterID'].unique())
+        del_cluster_id = st.selectbox("Cluster ID (Hapus)", options=unique_clusters_del)
+        
+        delete_submitted = st.form_submit_button("Konfirmasi Hapus Data")
+        
+        if delete_submitted:
+            # Combine date and time to create the full timestamp
+            full_del_timestamp = datetime.combine(del_date, del_time).strftime('%Y-%m-%d %H:%M:%S')
 
-        if deleted_rows_indices:
-            # Use the original DataFrame `df` with the indices from the editor
-            rows_to_delete = df.iloc[deleted_rows_indices]
-
-            # Create a list of unique values to form a WHERE clause
-            delete_conditions = []
-            for _, row in rows_to_delete.iterrows():
-                # FIX: Use a more robust WHERE clause with explicit BigQuery syntax
-                # This ensures the datetime, amount, and sender are correctly matched.
-                condition = (
-                    f"TransactionDate = DATETIME('{row['TransactionDate'].strftime('%Y-%m-%d %H:%M:%S')}') AND "
-                    f"Amount = {row['Amount']} AND "
-                    f"Sender = {row['Sender']} AND "
-                    f"ClusterID = '{row['ClusterID']}'"
-                )
-                delete_conditions.append(condition)
+            # Create a WHERE clause based on the manual inputs
+            where_clause = (
+                f"TransactionDate = DATETIME('{full_del_timestamp}') AND "
+                f"Amount = {del_amount} AND "
+                f"Sender = {del_sender} AND "
+                f"ClusterID = '{del_cluster_id}'"
+            )
             
-            # Combine all conditions into a single WHERE clause
-            where_clause = " OR ".join([f"({c})" for c in delete_conditions])
-            
-            # BigQuery DELETE statement
+            # Construct the BigQuery DELETE statement
             delete_query = f"DELETE FROM `{table_id}` WHERE {where_clause}"
 
             try:
@@ -208,14 +207,11 @@ with st.sidebar.expander("Hapus Data"):
                 query_job = client.query(delete_query)
                 query_job.result() # Wait for the job to complete
                 
-                st.success(f"{len(deleted_rows_indices)} baris berhasil dihapus dari BigQuery.")
+                st.success("Baris berhasil dihapus dari BigQuery.")
                 st.cache_data.clear()
                 st.rerun()
             except Exception as e:
                 st.error(f"Terjadi kesalahan saat menghapus data: {e}")
-        else:
-            st.warning("Tidak ada baris yang dipilih untuk dihapus.")
-
 
 # ---
 # Cascading filters
@@ -381,4 +377,109 @@ if len(date_range) == 2:
         final_filtered_df['RunningSaldo'] = saldo_awal + final_filtered_df['NetChange'].cumsum()
 
         # Reformat numeric columns for display with commas
-        final_
+        final_filtered_df['Amount'] = final_filtered_df['Amount'].apply(lambda x: f"{x:,.0f}")
+        final_filtered_df['RunningSaldo'] = final_filtered_df['RunningSaldo'].apply(lambda x: f"{x:,.0f}")
+        
+        st.markdown(
+            """
+            <h2 style='text-align: center;'>Filtered Data with Running Balance
+            </h2>
+            """,
+            unsafe_allow_html=True
+        )
+        st.dataframe(final_filtered_df, use_container_width=True)
+
+        # Download button for filtered data
+        excel_buffer_filtered = io.BytesIO()
+        final_filtered_df.to_excel(excel_buffer_filtered, index=False, engine='xlsxwriter')
+        excel_buffer_filtered.seek(0)
+        
+        st.download_button(
+            label="Download Filtered Data",
+            data=excel_buffer_filtered,
+            file_name='data_finpay_filtered.xlsx',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            help='Klik untuk mengunduh data yang sudah difilter dalam format Excel.'
+        )
+        
+        final_balance_display = final_filtered_df['RunningSaldo'].iloc[-1]
+        st.markdown(f"**Final Balance: Rp {final_balance_display}**")
+
+    # ---
+    ## Summary Table of All Clusters (New location)
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown(
+        """
+        <h2 style='text-align: center;'>Ringkasan Saldo Berdasarkan Cluster
+        </h2>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # Create a summary DataFrame
+    summary_df = df.groupby('ClusterID')['Amount'].sum().reset_index()
+    summary_df.rename(columns={'Amount': 'Total Transaksi'}, inplace=True)
+
+    # Separate Debit and Kredit
+    total_kredit_by_cluster = df[df['TransactionType'] == 'Kredit'].groupby('ClusterID')['Amount'].sum()
+    total_debit_by_cluster = df[df['TransactionType'] == 'Debit'].groupby('ClusterID')['Amount'].sum()
+    
+    # Calculate latest transaction date per cluster
+    latest_date_by_cluster = df.groupby('ClusterID')['TransactionDate'].max()
+
+    # Merge into a single summary DataFrame
+    summary_df = summary_df.merge(total_kredit_by_cluster, on='ClusterID', how='left').rename(columns={'Amount': 'Total Kredit'})
+    summary_df = summary_df.merge(total_debit_by_cluster, on='ClusterID', how='left').rename(columns={'Amount': 'Total Debit'})
+    summary_df = summary_df.merge(latest_date_by_cluster, on='ClusterID', how='left').rename(columns={'TransactionDate': 'Data Update'})
+
+    # Fill NaN with 0 for clusters with no credit or debit transactions
+    summary_df[['Total Kredit', 'Total Debit']] = summary_df[['Total Kredit', 'Total Debit']].fillna(0)
+
+    # Add Initial Balance and Running Balance columns
+    summary_df['Initial Balance'] = summary_df['ClusterID'].map(initial_balances_by_cluster).fillna(0)
+    summary_df['Running Balance'] = summary_df['Initial Balance'] + summary_df['Total Kredit'] - summary_df['Total Debit']
+    
+    # Calculate the grand total of the running balances
+    total_running_balance = summary_df['Running Balance'].sum()
+
+    # Add a summary row at the bottom of the dataframe
+    summary_row = pd.DataFrame([['Total', 
+                                 '---', # Data Update for total row
+                                 summary_df['Total Transaksi'].sum(), 
+                                 summary_df['Total Kredit'].sum(), 
+                                 summary_df['Total Debit'].sum(), 
+                                 summary_df['Initial Balance'].sum(), 
+                                 total_running_balance]], 
+                               columns=['ClusterID', 'Data Update', 'Total Transaksi', 'Total Kredit', 'Total Debit', 'Initial Balance', 'Running Balance'])
+    
+    summary_df = pd.concat([summary_df, summary_row], ignore_index=True)
+
+    # Reformat numeric and datetime columns for display
+    summary_df['Data Update'] = summary_df['Data Update'].apply(lambda x: x.strftime('%Y-%m-%d %H:%M:%S') if pd.notnull(x) and x != '---' else '---')
+    summary_df['Total Transaksi'] = summary_df['Total Transaksi'].apply(lambda x: f"{x:,.0f}")
+    summary_df['Total Kredit'] = summary_df['Total Kredit'].apply(lambda x: f"{x:,.0f}")
+    summary_df['Total Debit'] = summary_df['Total Debit'].apply(lambda x: f"{x:,.0f}")
+    summary_df['Initial Balance'] = summary_df['Initial Balance'].apply(lambda x: f"{x:,.0f}")
+    summary_df['Running Balance'] = summary_df['Running Balance'].apply(lambda x: f"{x:,.0f}")
+
+    # Reorder columns for better readability
+    summary_df = summary_df[['ClusterID', 'Data Update', 'Total Kredit', 'Total Debit', 'Initial Balance', 'Running Balance']]
+
+    st.dataframe(summary_df, use_container_width=True)
+
+    # Download button for the summary table
+    summary_excel_buffer = io.BytesIO()
+    summary_df.to_excel(summary_excel_buffer, index=False, engine='xlsxwriter')
+    summary_excel_buffer.seek(0)
+    st.download_button(
+        label="Download Ringkasan Klaster",
+        data=summary_excel_buffer,
+        file_name='ringkasan_klaster.xlsx',
+        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        help='Klik untuk mengunduh ringkasan saldo klaster dalam format Excel.'
+    )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+else:
+    st.info("Pilih rentang tanggal untuk menampilkan data yang difilter dan scorecard.")
