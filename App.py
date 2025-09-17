@@ -50,7 +50,7 @@ st.markdown(
 
 if st.button("Clear Cache"):
     st.cache_data.clear()
-    st.experimental_rerun()
+    st.rerun()
 
 # Load data
 df = load_data(client, query)
@@ -162,7 +162,7 @@ with st.sidebar.expander("Tambah Data Baru"):
                     st.success("Data berhasil dimasukkan ke tabel BigQuery.")
                     st.info("Memperbarui dashboard dengan data terbaru...")
                     st.cache_data.clear()
-                    st.experimental_rerun()
+                    st.rerun()
             except Exception as e:
                 st.error(f"Terjadi kesalahan saat memasukkan data ke BigQuery: {e}")
             
