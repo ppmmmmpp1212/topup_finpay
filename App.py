@@ -166,11 +166,8 @@ with st.sidebar.expander("Tambah Data Baru"):
             except Exception as e:
                 st.error(f"Terjadi kesalahan saat memasukkan data ke BigQuery: {e}")
 
-
-
 # ---
 # Cascading filters
-# Create a filtered dataframe to be used by all subsequent filters
 filtered_df = df.copy()
 
 # 1. TransactionType Filter
@@ -180,8 +177,6 @@ selected_transaction_types = st.sidebar.multiselect(
     options=unique_transaction_types,
     default=unique_transaction_types
 )
-
-# Filter the dataframe based on the first selection
 filtered_df = filtered_df[filtered_df['TransactionType'].isin(selected_transaction_types)]
 
 # 2. ClusterID Filter (cascading)
@@ -191,8 +186,6 @@ selected_cluster_ids = st.sidebar.multiselect(
     options=unique_cluster_ids,
     default=unique_cluster_ids
 )
-
-# Filter the dataframe based on the second selection
 filtered_df = filtered_df[filtered_df['ClusterID'].isin(selected_cluster_ids)]
 
 # 3. Sender Filter (cascading)
@@ -202,8 +195,6 @@ selected_senders = st.sidebar.multiselect(
     options=unique_senders,
     default=unique_senders
 )
-
-# Filter the dataframe based on the third selection
 filtered_df = filtered_df[filtered_df['Sender'].isin(selected_senders)]
 
 # 4. Name Filter (cascading)
@@ -213,8 +204,6 @@ selected_names = st.sidebar.multiselect(
     options=unique_names,
     default=unique_names
 )
-
-# Filter the dataframe based on the fourth selection
 filtered_df = filtered_df[filtered_df['Nama'].isin(selected_names)].copy()
 
 # Date Filter (applied last for final display)
@@ -226,6 +215,62 @@ date_range = st.sidebar.date_input(
     min_value=min_date,
     max_value=max_date
 )
+
+# ---
+## Fitur Hapus Data di Sidebar
+with st.sidebar.expander("Hapus Data"):
+    st.warning("PERINGATAN: Tindakan ini akan menghapus data secara PERMANEN dari BigQuery.")
+    
+    # Tambahkan indeks unik sementara untuk identifikasi baris
+    df_for_delete = df.copy()
+    df_for_delete['row_index'] = df_for_delete.index
+    
+    # Gunakan multiselect untuk memilih baris yang akan dihapus
+    rows_to_delete_index = st.multiselect(
+        "Pilih baris yang akan dihapus (berdasarkan indeks):",
+        options=df_for_delete.index.tolist(),
+        format_func=lambda idx: f"Index {idx}: {df_for_delete.loc[idx, 'TransactionDate'].strftime('%Y-%m-%d %H:%M:%S')} - Rp {df_for_delete.loc[idx, 'Amount']} ({df_for_delete.loc[idx, 'TransactionType']})"
+    )
+    
+    # Tombol hapus berada dalam form untuk mencegah re-eksekusi tidak terduga
+    with st.form("delete_form"):
+        delete_button = st.form_submit_button("Hapus Data yang Dipilih")
+        
+        if delete_button and rows_to_delete_index:
+            st.info(f"Mencoba menghapus {len(rows_to_delete_index)} baris...")
+            
+            rows_to_delete_df = df.loc[rows_to_delete_index]
+            deletion_status = {'success': [], 'failed': []}
+            
+            for index, row in rows_to_delete_df.iterrows():
+                try:
+                    # Construct a WHERE clause that uniquely identifies the row
+                    delete_query = f"""
+                    DELETE FROM `{table_id}`
+                    WHERE 
+                        TransactionDate = PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%S', '{row['TransactionDate'].isoformat()}') AND
+                        Amount = {row['Amount']} AND
+                        TransactionType = '{row['TransactionType']}' AND
+                        Nama = '{row['Nama'].replace("'", "''")}' AND
+                        ClusterID = '{row['ClusterID']}' AND
+                        Sender = {row['Sender']}
+                    """
+                    
+                    query_job = client.query(delete_query)
+                    query_job.result()
+                    
+                    deletion_status['success'].append(f"Row {index}")
+                    
+                except Exception as e:
+                    deletion_status['failed'].append(f"Row {index} (Error: {e})")
+            
+            if deletion_status['success']:
+                st.success(f"Berhasil menghapus {len(deletion_status['success'])} baris.")
+            if deletion_status['failed']:
+                st.error(f"Gagal menghapus {len(deletion_status['failed'])} baris: {', '.join(deletion_status['failed'])}")
+
+            st.cache_data.clear()
+            st.rerun()
 
 # ---
 ## Interactive Scorecards & Filtered Charts (Moved into date_range condition)
@@ -339,80 +384,12 @@ if len(date_range) == 2:
             unsafe_allow_html=True
         )
 
-        # --- Tambahan untuk fitur hapus data ---
-        st.markdown("### Pilih baris untuk dihapus")
-        # Tambahkan kolom unik sementara untuk identifikasi
-        final_filtered_df['ID_Temporer'] = final_filtered_df.index
-        
-        # Tampilkan DataFrame dengan kotak centang
-        edited_df = st.data_editor(
-            final_filtered_df,
-            hide_index=True,
-            column_order=['ID_Temporer', 'TransactionDate', 'Amount', 'TransactionType', 'Nama', 'ClusterID', 'Sender', 'RunningSaldo'],
-            column_config={
-                "ID_Temporer": st.column_config.CheckboxColumn(
-                    "Pilih",
-                    help="Pilih baris yang ingin dihapus.",
-                    default=False,
-                ),
-                "TransactionDate": "Tanggal Transaksi",
-                "Amount": "Jumlah",
-                "TransactionType": "Tipe Transaksi",
-                "Nama": "Nama",
-                "ClusterID": "ID Klaster",
-                "Sender": "Pengirim",
-                "RunningSaldo": "Saldo Berjalan"
-            }
-        )
-
-        # Temukan baris yang dipilih
-        rows_to_delete_df = edited_df[edited_df['ID_Temporer']]
-        
-        # Tombol hapus dalam form untuk mencegah eksekusi berulang
-        with st.form("delete_form"):
-            st.form_submit_button("Hapus Baris yang Dipilih")
-            delete_submitted = True # Flag untuk memastikan tombol ditekan
-
-            if delete_submitted and not rows_to_delete_df.empty:
-                st.info(f"Mencoba menghapus {len(rows_to_delete_df)} baris...")
-                
-                deletion_status = {'success': [], 'failed': []}
-                
-                for index, row in rows_to_delete_df.iterrows():
-                    try:
-                        # Construct a WHERE clause that uniquely identifies the row
-                        delete_query = f"""
-                        DELETE FROM `{table_id}`
-                        WHERE 
-                            TransactionDate = PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%S', '{row['TransactionDate'].isoformat()}') AND
-                            Amount = {row['Amount']} AND
-                            TransactionType = '{row['TransactionType']}' AND
-                            Nama = '{row['Nama']}' AND
-                            ClusterID = '{row['ClusterID']}' AND
-                            Sender = {row['Sender']}
-                        """
-                        
-                        query_job = client.query(delete_query)
-                        query_job.result()
-                        
-                        deletion_status['success'].append(f"Row {index} (Date: {row['TransactionDate']})")
-                        
-                    except Exception as e:
-                        deletion_status['failed'].append(f"Row {index} (Error: {e})")
-                
-                if deletion_status['success']:
-                    st.success(f"Berhasil menghapus {len(deletion_status['success'])} baris.")
-                if deletion_status['failed']:
-                    st.error(f"Gagal menghapus {len(deletion_status['failed'])} baris: {', '.join(deletion_status['failed'])}")
-
-                # Clear cache and rerun the app to show the updated data
-                st.cache_data.clear()
-                st.rerun()
-
         # Reformat numeric columns for display with commas
         final_filtered_df['Amount'] = final_filtered_df['Amount'].apply(lambda x: f"{x:,.0f}")
         final_filtered_df['RunningSaldo'] = final_filtered_df['RunningSaldo'].apply(lambda x: f"{x:,.0f}")
         
+        st.dataframe(final_filtered_df, use_container_width=True)
+
         # Download button for filtered data
         excel_buffer_filtered = io.BytesIO()
         final_filtered_df.to_excel(excel_buffer_filtered, index=False, engine='xlsxwriter')
