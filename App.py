@@ -4,7 +4,7 @@ from google.oauth2 import service_account
 import pandas as pd
 import plotly.graph_objects as go
 import json
-from datetime import date
+from datetime import date, datetime
 import io
 
 # Set Streamlit page to wide mode
@@ -109,8 +109,51 @@ with st.expander("Lihat Raw Data"):
         help='Klik untuk mengunduh seluruh data dalam format Excel.'
     )
 
+# ---
+## Sidebar
 st.sidebar.header("Data Filters & Settings")
 
+# NEW: Form Input Data
+with st.sidebar.expander("Tambah Data Baru"):
+    with st.form("new_data_form"):
+        st.subheader("Form Input Transaksi")
+        
+        # Form fields
+        transaction_date = st.date_input("Transaction Date")
+        transaction_time = st.time_input("Transaction Time")
+        amount = st.number_input("Amount", min_value=0, step=1000, format="%d")
+        transaction_type = st.selectbox("Transaction Type", options=['Kredit', 'Debit'])
+        nama = st.text_input("Nama")
+        
+        # Use unique ClusterIDs from the data for consistency
+        unique_cluster_ids_form = sorted(df['ClusterID'].unique())
+        cluster_id = st.selectbox("Cluster ID", options=unique_cluster_ids_form)
+        
+        sender = st.text_input("Sender")
+        
+        submitted = st.form_submit_button("Submit")
+
+        if submitted:
+            # Combine date and time
+            full_transaction_date = datetime.combine(transaction_date, transaction_time)
+            
+            # Create a dictionary to represent the new row
+            new_row = {
+                'TransactionDate': full_transaction_date,
+                'Amount': amount,
+                'TransactionType': transaction_type,
+                'Nama': nama,
+                'ClusterID': cluster_id,
+                'Sender': sender
+            }
+            
+            # This is a simulation. In a real app, you would insert this into BigQuery.
+            st.success("Data berhasil disimulasikan untuk dimasukkan.")
+            st.write("Data yang akan dimasukkan:")
+            st.write(pd.DataFrame([new_row]))
+            
+# ---
+# Cascading filters
 # Create a filtered dataframe to be used by all subsequent filters
 filtered_df = df.copy()
 
