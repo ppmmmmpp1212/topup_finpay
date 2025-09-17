@@ -165,7 +165,48 @@ with st.sidebar.expander("Tambah Data Baru"):
                     st.rerun()
             except Exception as e:
                 st.error(f"Terjadi kesalahan saat memasukkan data ke BigQuery: {e}")
+
+# NEW: Form Hapus Data
+with st.sidebar.expander("Hapus Data"):
+    with st.form("delete_data_form"):
+        st.subheader("Form Hapus Transaksi")
+        st.write("Masukkan nilai unik dari kolom yang ingin dihapus. Jika tidak ada ID unik, gunakan kombinasi Nama, Tanggal, dan Amount.")
+        
+        # You need a way to uniquely identify the row to delete.
+        # This assumes your table has a unique 'TransactionID' or similar.
+        # If not, you must use a combination of fields (e.g., date, amount, name).
+        
+        # Option 1: Using a hypothetical ID column
+        # unique_id_to_delete = st.number_input("Masukkan ID unik untuk dihapus", min_value=0, step=1)
+
+        # Option 2: Using a combination of fields (more realistic for this table)
+        delete_date = st.date_input("Transaction Date to Delete", value=date.today())
+        delete_amount = st.number_input("Amount to Delete", min_value=0, step=1000, format="%d")
+        delete_nama = st.text_input("Nama to Delete")
+
+        deleted = st.form_submit_button("Hapus Data")
+
+        if deleted:
+            # Construct the WHERE clause for the DELETE statement
+            # Adjust the column names as needed to match your table's schema
+            delete_query = f"""
+            DELETE FROM `{table_id}`
+            WHERE DATE(TransactionDate) = '{delete_date.isoformat()}'
+              AND Amount = {int(delete_amount)}
+              AND Nama = '{delete_nama}'
+            LIMIT 1
+            """
             
+            try:
+                # Execute the delete query
+                client.query(delete_query).result()
+                st.success("Data berhasil dihapus dari tabel BigQuery.")
+                st.info("Memperbarui dashboard...")
+                st.cache_data.clear()
+                st.rerun()
+            except Exception as e:
+                st.error(f"Terjadi kesalahan saat menghapus data dari BigQuery: {e}")
+
 # ---
 # Cascading filters
 # Create a filtered dataframe to be used by all subsequent filters
@@ -322,7 +363,7 @@ if len(date_range) == 2:
         # Create a new column 'NetChange' for calculation
         final_filtered_df['NetChange'] = final_filtered_df.apply(
             lambda row: row['Amount'] if row['TransactionType'] == 'Kredit' else 
-                       -row['Amount'] if row['TransactionType'] == 'Debit' else 0,
+                         -row['Amount'] if row['TransactionType'] == 'Debit' else 0,
             axis=1
         )
         
