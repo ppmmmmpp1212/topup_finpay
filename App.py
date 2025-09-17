@@ -165,6 +165,7 @@ with st.sidebar.expander("Tambah Data Baru"):
                     st.rerun()
             except Exception as e:
                 st.error(f"Terjadi kesalahan saat memasukkan data ke BigQuery: {e}")
+
 # ---
 # NEW: Hapus Data
 with st.sidebar.expander("Hapus Data"):
@@ -174,25 +175,30 @@ with st.sidebar.expander("Hapus Data"):
     if st.button("Tampilkan Data untuk Dihapus"):
         # Display data in st.data_editor to allow selection and deletion
         editable_df = df.copy()
+        
+        # Ensure datetime is in a format BigQuery can interpret
         editable_df['TransactionDate'] = editable_df['TransactionDate'].dt.strftime('%Y-%m-%d %H:%M:%S')
         
-        edited_df = st.data_editor(editable_df, num_rows="dynamic", key="data_to_delete")
+        # Use key to prevent multiple editors from interfering
+        edited_df = st.data_editor(editable_df, num_rows="dynamic", key="data_to_delete_editor")
         
         if st.button("Konfirmasi Hapus Data"):
-            deleted_rows_indices = st.session_state["data_to_delete"]["deleted_rows"]
-            
+            # Get the indices of rows that were deleted
+            deleted_rows_indices = edited_df.index[edited_df.isnull().all(axis=1)].tolist()
+
             if deleted_rows_indices:
                 rows_to_delete = df.iloc[deleted_rows_indices]
 
                 # Create a list of unique values to form a WHERE clause
                 delete_conditions = []
                 for _, row in rows_to_delete.iterrows():
-                    # For BigQuery DELETE, we need to create a WHERE condition for each row
-                    # using a combination of columns to ensure uniqueness
+                    # FIX: Use correct syntax for BigQuery DATETIME literal
+                    # To be safe, we use a composite key to identify the row to delete
                     condition = (
-                        f"TransactionDate = '{row['TransactionDate']}' AND "
+                        f"TransactionDate = DATETIME('{row['TransactionDate'].strftime('%Y-%m-%d %H:%M:%S')}') AND "
                         f"Amount = {row['Amount']} AND "
-                        f"Sender = {row['Sender']}"
+                        f"Sender = {row['Sender']} AND "
+                        f"ClusterID = '{row['ClusterID']}'"
                     )
                     delete_conditions.append(condition)
                 
@@ -213,7 +219,9 @@ with st.sidebar.expander("Hapus Data"):
                 except Exception as e:
                     st.error(f"Terjadi kesalahan saat menghapus data: {e}")
             else:
-                st.warning("Tidak ada baris yang dipilih untuk dihapus.")            
+                st.warning("Tidak ada baris yang dipilih untuk dihapus.")
+
+
 # ---
 # Cascading filters
 # Create a filtered dataframe to be used by all subsequent filters
