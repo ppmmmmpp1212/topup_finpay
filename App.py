@@ -192,8 +192,9 @@ with st.sidebar.expander("Hapus Data Manual"):
             full_del_timestamp = datetime.combine(del_date, del_time).strftime('%Y-%m-%d %H:%M:%S')
 
             # Create a WHERE clause based on the manual inputs
+            # FIX: Use TIMESTAMP() function to match the column data type
             where_clause = (
-                f"TransactionDate = DATETIME('{full_del_timestamp}') AND "
+                f"TransactionDate = TIMESTAMP('{full_del_timestamp}') AND "
                 f"Amount = {del_amount} AND "
                 f"Sender = {del_sender} AND "
                 f"ClusterID = '{del_cluster_id}'"
