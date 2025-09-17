@@ -188,13 +188,11 @@ with st.sidebar.expander("Hapus Data"):
 
         if deleted:
             # Construct the WHERE clause for the DELETE statement
-            # Adjust the column names as needed to match your table's schema
             delete_query = f"""
             DELETE FROM `{table_id}`
             WHERE DATE(TransactionDate) = '{delete_date.isoformat()}'
               AND Amount = {int(delete_amount)}
               AND Nama = '{delete_nama}'
-            LIMIT 1
             """
             
             try:
