@@ -216,8 +216,6 @@ date_range = st.sidebar.date_input(
     max_value=max_date
 )
 
-# ---
-## Fitur Hapus Data di Sidebar
 with st.sidebar.expander("Hapus Data"):
     st.warning("PERINGATAN: Tindakan ini akan menghapus data secara PERMANEN dari BigQuery.")
     
@@ -271,7 +269,6 @@ with st.sidebar.expander("Hapus Data"):
 
             st.cache_data.clear()
             st.rerun()
-
 # ---
 ## Interactive Scorecards & Filtered Charts (Moved into date_range condition)
 col1, col2, col3 = st.columns(3)
