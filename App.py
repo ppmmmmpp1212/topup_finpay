@@ -166,53 +166,7 @@ with st.sidebar.expander("Tambah Data Baru"):
             except Exception as e:
                 st.error(f"Terjadi kesalahan saat memasukkan data ke BigQuery: {e}")
 
-# ---
-# NEW: Hapus Data secara manual
-with st.sidebar.expander("Hapus Data Manual"):
-    st.subheader("Hapus Baris Data (Manual)")
-    st.warning("Perhatian: Penghapusan data bersifat permanen dan tidak dapat dibatalkan.")
-    
-    with st.form("manual_delete_form"):
-        st.info("Masukkan detail baris yang ingin dihapus.")
-        
-        # Input fields for the row to be deleted
-        del_date = st.date_input("Transaction Date (Hapus)", value=date.today())
-        del_time = st.time_input("Transaction Time (Hapus)", value=datetime.now().time())
-        del_amount = st.number_input("Amount (Hapus)", min_value=0, step=1000, format="%d")
-        del_sender = st.number_input("Sender (Hapus)", min_value=0, step=1, format="%d")
-        
-        # Using a selectbox for ClusterID to prevent typos
-        unique_clusters_del = sorted(df['ClusterID'].unique())
-        del_cluster_id = st.selectbox("Cluster ID (Hapus)", options=unique_clusters_del)
-        
-        delete_submitted = st.form_submit_button("Konfirmasi Hapus Data")
-        
-        if delete_submitted:
-            # Combine date and time to create the full timestamp
-            full_del_timestamp = datetime.combine(del_date, del_time).strftime('%Y-%m-%d %H:%M:%S')
 
-            # Create a WHERE clause based on the manual inputs
-            # FIX: Use TIMESTAMP() function to match the column data type
-            where_clause = (
-                f"TransactionDate = TIMESTAMP('{full_del_timestamp}') AND "
-                f"Amount = {del_amount} AND "
-                f"Sender = {del_sender} AND "
-                f"ClusterID = '{del_cluster_id}'"
-            )
-            
-            # Construct the BigQuery DELETE statement
-            delete_query = f"DELETE FROM `{table_id}` WHERE {where_clause}"
-
-            try:
-                # Execute the delete query
-                query_job = client.query(delete_query)
-                query_job.result() # Wait for the job to complete
-                
-                st.success("Baris berhasil dihapus dari BigQuery.")
-                st.cache_data.clear()
-                st.rerun()
-            except Exception as e:
-                st.error(f"Terjadi kesalahan saat menghapus data: {e}")
 
 # ---
 # Cascading filters
