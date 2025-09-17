@@ -132,7 +132,8 @@ with st.sidebar.expander("Tambah Data Baru"):
         unique_cluster_ids_form = sorted(df['ClusterID'].unique())
         cluster_id = st.selectbox("Cluster ID", options=unique_cluster_ids_form)
         
-        sender = st.text_input("Sender")
+        # FIX: Changed to number input to match BigQuery schema
+        sender = st.number_input("Sender", min_value=0, step=1, format="%d")
         
         submitted = st.form_submit_button("Submit")
 
@@ -147,7 +148,7 @@ with st.sidebar.expander("Tambah Data Baru"):
                 'TransactionType': transaction_type,
                 'Nama': nama,
                 'ClusterID': cluster_id,
-                'Sender': sender
+                'Sender': int(sender) # Ensure sender is an integer
             }
             
             # Insert the new row into the BigQuery table
