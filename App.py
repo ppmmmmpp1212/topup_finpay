@@ -19,10 +19,13 @@ except Exception as e:
     st.error(f"Error loading BigQuery credentials: {e}")
     st.stop()
 
+# Define the full table ID
+table_id = "alfred-analytics-406004.analytics_alfred.finpay_topup_joined"
+
 # BigQuery query to fetch all data
-query = """
+query = f"""
 SELECT *
-FROM `alfred-analytics-406004.analytics_alfred.finpay_topup_joined`
+FROM `{table_id}`
 """
 
 @st.cache_data
@@ -119,8 +122,8 @@ with st.sidebar.expander("Tambah Data Baru"):
         st.subheader("Form Input Transaksi")
         
         # Form fields
-        transaction_date = st.date_input("Transaction Date")
-        transaction_time = st.time_input("Transaction Time")
+        transaction_date = st.date_input("Transaction Date", value=date.today())
+        transaction_time = st.time_input("Transaction Time", value=datetime.now().time())
         amount = st.number_input("Amount", min_value=0, step=1000, format="%d")
         transaction_type = st.selectbox("Transaction Type", options=['Kredit', 'Debit'])
         nama = st.text_input("Nama")
@@ -139,18 +142,28 @@ with st.sidebar.expander("Tambah Data Baru"):
             
             # Create a dictionary to represent the new row
             new_row = {
-                'TransactionDate': full_transaction_date,
-                'Amount': amount,
+                'TransactionDate': full_transaction_date.isoformat(), # Format as ISO string
+                'Amount': float(amount),
                 'TransactionType': transaction_type,
                 'Nama': nama,
                 'ClusterID': cluster_id,
                 'Sender': sender
             }
             
-            # This is a simulation. In a real app, you would insert this into BigQuery.
-            st.success("Data berhasil disimulasikan untuk dimasukkan.")
-            st.write("Data yang akan dimasukkan:")
-            st.write(pd.DataFrame([new_row]))
+            # Insert the new row into the BigQuery table
+            try:
+                # BigQuery requires the data as a list of dictionaries
+                errors = client.insert_rows_json(table_id, [new_row])
+                
+                if errors:
+                    st.error(f"Gagal memasukkan data: {errors}")
+                else:
+                    st.success("Data berhasil dimasukkan ke tabel BigQuery.")
+                    st.info("Memperbarui dashboard dengan data terbaru...")
+                    st.cache_data.clear()
+                    st.experimental_rerun()
+            except Exception as e:
+                st.error(f"Terjadi kesalahan saat memasukkan data ke BigQuery: {e}")
             
 # ---
 # Cascading filters
