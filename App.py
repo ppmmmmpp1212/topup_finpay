@@ -12,7 +12,6 @@ st.set_page_config(layout="wide")
 
 # Fetch credentials from Streamlit secrets
 try:
-    # Perbaikan sintaksis di sini: spasi biasa, bukan karakter non-printable
     credentials_json = st.secrets["bigquery"]["credentials"]
     credentials = service_account.Credentials.from_service_account_info(json.loads(credentials_json))
     client = bigquery.Client(credentials=credentials, project=credentials.project_id)
@@ -334,6 +333,20 @@ if len(date_range) == 2:
         final_filtered_df['Amount'] = final_filtered_df['Amount'].apply(lambda x: f"{x:,.0f}")
         final_filtered_df['RunningSaldo'] = final_filtered_df['RunningSaldo'].apply(lambda x: f"{x:,.0f}")
         
+        # List of columns to display, including NetChange and RunningSaldo
+        columns_to_display = [
+            'Remarks', 'Receiver', 'Currency', 'Amount', 'Sender', 'TransactionType',
+            'ClusterID', 'TransactionDate', 'Nama_Manager_Cluster', 'TAP',
+            'Kota_Kabupaten', 'RS_Number', 'Nama_SF', 'nama_outlet', 'SF_Code_2',
+            'SF_Code_1', 'Region', 'cluster_code', 'end_date', 'id_outlet',
+            'start_date', 'PJP_Area', 'PJP_Branch', 'PJP_Cluster', 'Nama',
+            'Jabatan', 'No_Kontak', 'NetChange', 'RunningSaldo'
+        ]
+
+        # Filter the DataFrame to only include the desired columns
+        existing_columns = [col for col in columns_to_display if col in final_filtered_df.columns]
+        final_filtered_df_display = final_filtered_df[existing_columns]
+
         st.markdown(
             """
             <h2 style='text-align: center;'>Filtered Data with Running Balance
@@ -341,12 +354,12 @@ if len(date_range) == 2:
             """,
             unsafe_allow_html=True
         )
-        # Display the full filtered DataFrame, including 'RunningSaldo' and 'NetChange'
-        st.dataframe(final_filtered_df, use_container_width=True)
+        # Display the filtered DataFrame with the specified columns and no index
+        st.dataframe(final_filtered_df_display, use_container_width=True)
         
         # Download button for filtered data
         excel_buffer_filtered = io.BytesIO()
-        final_filtered_df.to_excel(excel_buffer_filtered, index=False, engine='xlsxwriter')
+        final_filtered_df_display.to_excel(excel_buffer_filtered, index=False, engine='xlsxwriter')
         excel_buffer_filtered.seek(0)
         
         st.download_button(
