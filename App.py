@@ -12,9 +12,9 @@ st.set_page_config(layout="wide")
 
 # Fetch credentials from Streamlit secrets
 try:
-    credentials_json = st.secrets["bigquery"]["credentials"]
-    credentials = service_account.Credentials.from_service_account_info(json.loads(credentials_json))
-    client = bigquery.Client(credentials=credentials, project=credentials.project_id)
+   credentials_json = st.secrets["bigquery"]["credentials"]
+   credentials = service_account.Credentials.from_service_account_info(json.loads(credentials_json))
+   client = bigquery.Client(credentials=credentials, project=credentials.project_id)
 except Exception as e:
     st.error(f"Error loading BigQuery credentials: {e}")
     st.stop()
